@@ -60,7 +60,7 @@ public:
 		std::cout << e.oscAddress << endl;
 	}
 	
-    void receive(){
+    ofJson receive(){
         ofHttpResponse resp = ofLoadURL(receiveAddress);
         
         // catch if not connected
@@ -84,7 +84,8 @@ public:
 
         gui.setup("surfaces");
         gui.add(mixer.parameterGroup);
-        
+		
+		return response;
     }
     
     

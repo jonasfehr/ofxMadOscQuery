@@ -39,7 +39,6 @@ public:
 	
 	
 	~MadParameter(){
-//		this->removeListener(this, &MadParameter::onParameterChange);
 	}
 	
 	float getParameterValue(){
