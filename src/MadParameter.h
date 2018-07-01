@@ -8,17 +8,14 @@
 #ifndef MadParameter_h
 #define MadParameter_h
 
-#include "ofMain.h"
+//#include "ofMain.h"
 #include "ofxMidiDevice.h"
 #include "ofxOsc.h"
-//ofEvent<ofxOscMessage> MadParameter::oscSendEvent = ofEvent<ofxOscMessage>();
 
 class MadParameter : public ofParameter<float>{
 public:
 	MadParameter(ofJson parameterValues
-				 ){
-//		this->addListener(this, &MadParameter::onParameterChange);
-		
+				 ){		
 		// Set values
 		this->setOscAddress(parameterValues
 				 ["FULL_PATH"].get<std::string>());
