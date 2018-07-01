@@ -99,8 +99,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
                 }
             }
         }
-        
-        
         if(!page.isEmpty()){
             pages.push_back(page);
             idx++;
@@ -122,7 +120,7 @@ MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
 //--------------------------------------------------------------
 MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string name){
 	std::string key = parameterValues["FULL_PATH"];
-	parameterMap.insert(std::make_pair(key, MadParameter(parameterValues)));
+	parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
 	auto val = &parameterMap.operator[](key);
 	return val;
 }
