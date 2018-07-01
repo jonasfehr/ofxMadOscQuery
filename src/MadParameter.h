@@ -14,8 +14,7 @@
 
 class MadParameter : public ofParameter<float>{
 public:
-	MadParameter(ofJson parameterValues
-				 ){		
+	MadParameter(ofJson parameterValues){		
 		// Set values
 		this->setOscAddress(parameterValues
 				 ["FULL_PATH"].get<std::string>());

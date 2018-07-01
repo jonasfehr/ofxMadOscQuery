@@ -84,7 +84,6 @@ public:
     
     std::pair<int,int> getRange(){
         return range;
-        
     }
     
     void linkCycleControlComponents(MidiComponent &midiComponentForward,MidiComponent &midiComponentBackward){
@@ -103,8 +102,3 @@ private:
     std::pair<int, int> range;
     ofxMidiDevice* midiDevice;
 };
-
-
-
-
-

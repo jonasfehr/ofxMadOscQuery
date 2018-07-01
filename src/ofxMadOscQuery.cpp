@@ -76,7 +76,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
         MadParameterPage page = MadParameterPage(keyword, midiDevice);
         
         // Add parameters
-        
         for(auto& contents : element["CONTENTS"]){
             if(contents["DESCRIPTION"] == "Opacity"){
                 page.addParameter(MadParameter(contents));
@@ -113,4 +112,11 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
 //--------------------------------------------------------------
 void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
     oscSender.sendMessage(m, false);
+}
+
+//--------------------------------------------------------------
+MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
+	// Add to map
+	
+	// return reference
 }
