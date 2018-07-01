@@ -45,5 +45,6 @@ public:
     std::string getStatusString();
 	
 	MadParameter* addParameter(ofJson parameterValues);
+	MadParameter* addParameter(ofJson parameterValues, std::string name);
 	std::map<std::string, MadParameter> parameterMap;
 };

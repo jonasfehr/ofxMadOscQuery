@@ -56,7 +56,8 @@ void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxM
             continue;
         }
         // Add element
-        page.addParameter(MadParameter(element["CONTENTS"][keyword],element["DESCRIPTION"]));
+//        page.addParameter(addParameter(MadParameter(element["CONTENTS"][keyword], element["DESCRIPTION"])));
+        page.addParameter(addParameter(element["CONTENTS"][keyword], element["DESCRIPTION"]));
     }
         
     if(!page.isEmpty()){
@@ -78,13 +79,13 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
         // Add parameters
         for(auto& contents : element["CONTENTS"]){
             if(contents["DESCRIPTION"] == "Opacity"){
-                page.addParameter(MadParameter(contents));
+                page.addParameter(addParameter(contents));
             }
             if(contents["DESCRIPTION"] == "Color"){
                 for(auto& color : contents["CONTENTS"]){
                     // Add rgb
                     if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-                        page.addParameter(MadParameter(color));
+                        page.addParameter(addParameter(color));
                     }
                 }
             }
@@ -93,8 +94,7 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
                 for(auto& fx : contents["CONTENTS"]){
                     // Add rgb
                     if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
-                        page.addParameter(MadParameter(fx));
-						addParameter(fx);
+                        page.addParameter(addParameter(fx));
                     }
                 }
             }
@@ -107,9 +107,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
         }
     }
 }
-
-
-
 //--------------------------------------------------------------
 void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
     oscSender.sendMessage(m, false);
@@ -119,6 +116,13 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
 	std::string key = parameterValues["FULL_PATH"];
 	parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
+	auto val = &parameterMap.operator[](key);
+	return val;
+}
+//--------------------------------------------------------------
+MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string name){
+	std::string key = parameterValues["FULL_PATH"];
+	parameterMap.insert(std::make_pair(key, MadParameter(parameterValues)));
 	auto val = &parameterMap.operator[](key);
 	return val;
 }
