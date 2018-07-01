@@ -94,6 +94,7 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
                     // Add rgb
                     if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
                         page.addParameter(MadParameter(fx));
+						addParameter(fx);
                     }
                 }
             }
@@ -116,7 +117,8 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 
 //--------------------------------------------------------------
 MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
-	// Add to map
-	
-	// return reference
+	std::string key = parameterValues["FULL_PATH"];
+	parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
+	auto val = &parameterMap.operator[](key);
+	return val;
 }
