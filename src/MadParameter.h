@@ -11,7 +11,7 @@
 #include "ofMain.h"
 #include "ofxMidiDevice.h"
 #include "ofxOsc.h"
-
+//ofEvent<ofxOscMessage> MadParameter::oscSendEvent = ofEvent<ofxOscMessage>();
 
 class MadParameter : public ofParameter<float>{
 public:
@@ -61,32 +61,24 @@ public:
 	float getParameterValue(){
 		return this->get();
 	}
+    
+     ofEvent<ofxOscMessage> oscSendEvent;
+
 	
 	
 	string oscAddress;
 	void setOscAddress(string address){ oscAddress = address;}
-
-	// connect the sender from the parent to facilitate on change sending
-	
-	bool updated = false;
-	
 	
 	// Send OSC when parameter changed
-	void update(ofxOscSender & oscSender){
-		if(updated){
-			ofxOscMessage m;
-			m.setAddress(oscAddress);
-			m.addFloatArg(get());
-			oscSender.sendMessage(m, false);
-			cout << "got here send" << endl;
-			
-			updated = false;
-		}
-	}
-	
 	void onParameterChange(float & p){
 		this-set(p);
 		cout << "New param at: " + ofToString(this->get()) << endl;
+        
+        ofxOscMessage m;
+        m.setAddress(oscAddress);
+        m.addFloatArg(get());
+        
+        ofNotifyEvent(oscSendEvent,m,this);
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){

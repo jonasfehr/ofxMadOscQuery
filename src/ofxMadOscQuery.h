@@ -15,7 +15,7 @@
 #include "ofxOscParameterSync.h"
 
 #include "OscQueryEntry.h"
-#include "MadEvent.hpp"
+//#include "MadEvent.hpp"
 #include "Mixer.h"
 
 #define DEBUG true
@@ -47,7 +47,7 @@ public:
         this->receiveAddress = "http://"+ip+":"+ofToString(8010);
         oscSender.setup(ip, sendPort);
 		
-		ofAddListener(MadEvent::events, this, &MadOscQuery::madParameterEvent);
+//        ofAddListener(MadEvent::events, this, &MadOscQuery::madParameterEvent);
 		// Add listener to all gui elements
 //		this->addListener(this, &MadParameter::onParameterChange);
 //		ofAddListener(this, &MadOscQu)
@@ -56,9 +56,9 @@ public:
 		
     }
 	
-	void madParameterEvent(MadEvent &e){
-		std::cout << e.oscAddress << endl;
-	}
+//    void madParameterEvent(MadEvent &e){
+//        std::cout << e.oscAddress << endl;
+//    }
 	
     ofJson receive(){
         ofHttpResponse resp = ofLoadURL(receiveAddress);
@@ -92,9 +92,9 @@ public:
     void update(){
         //        syncOscSurfaces.update();
         
-        for(auto & s : surfaces){
-            s.second.opacity.update(oscSender);
-        }
+//        for(auto & s : surfaces){
+//            s.second.opacity.update(oscSender);
+//        }
 		
 		// Check for update and notify event
 //
