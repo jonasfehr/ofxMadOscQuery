@@ -34,6 +34,23 @@ public:
 		this->set(parameterValues
 				 ["VALUE"].at(0));
 	}
+    
+    MadParameter(ofJson parameterValues, string name){
+        this->setOscAddress(parameterValues
+                            ["FULL_PATH"].get<std::string>());
+        this->setName(name);
+        if(!parameterValues
+           ["RANGE"].is_null() ){
+            this->setMin(parameterValues
+                         ["RANGE"].at(0)["MIN"]);
+            this->setMax(parameterValues
+                         ["RANGE"].at(0)["MAX"]);
+        }
+        this->set(parameterValues
+                  ["VALUE"].at(0));
+                     
+    };
+
 	
 	MadParameter(){};
 	
