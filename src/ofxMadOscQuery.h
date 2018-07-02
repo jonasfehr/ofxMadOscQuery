@@ -57,5 +57,6 @@ public:
 	
 	MadParameter* addParameter(ofJson parameterValues);
 	MadParameter* addParameter(ofJson parameterValues, std::string name);
+	void addParameterToCustomPage(ofJson element, std::string type, MadParameterPage* customPage);
 	std::map<std::string, MadParameter> parameterMap;
 };
