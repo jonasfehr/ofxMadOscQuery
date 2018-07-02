@@ -14,7 +14,6 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
     this->receiveAddress = "http://"+ip+":"+ofToString(8010);
     oscSender.setup(ip, sendPort);
     oscReceiver.setup(receivePort);
-
 }
 
 //--------------------------------------------------------------
@@ -24,11 +23,6 @@ ofJson ofxMadOscQuery::receive(){
 		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
 		return;
 	}
-
-    // catch if not connected
-    if(resp.error == "Couldn't connect to server"){
-        return;
-    }
     std::stringstream ssJSON;
     ssJSON << resp.data;
     ssJSON >> response;
@@ -43,9 +37,7 @@ void ofxMadOscQuery::setupMadParameterFromJson(MadParameter & newParameter, ofJs
         newParameter.setMin(jsonParameterValues["RANGE"].at(0)["MIN"]);
         newParameter.setMax(jsonParameterValues["RANGE"].at(0)["MAX"]);
     }
-    
     newParameter.set( jsonParameterValues["VALUE"].at(0));
-    //        newParameter.addListener(this, &MadOscQuery::sendOsc);
 }
 
 //--------------------------------------------------------------
@@ -58,11 +50,8 @@ void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxM
             // Skip this one
             continue;
         }
-        // Add element
-        //        page.addParameter(addParameter(MadParameter(element["CONTENTS"][keyword], element["DESCRIPTION"])));
         page.addParameter(addParameter(element["CONTENTS"][keyword], element["DESCRIPTION"]));
     }
-    
     if(!page.isEmpty()){
         pages.push_back(page);
     }
@@ -86,7 +75,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
             }
             if(contents["DESCRIPTION"] == "Color"){
                 for(auto& color : contents["CONTENTS"]){
-                    // Add rgb
                     if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
                         page.addParameter(addParameter(color));
                     }
@@ -95,7 +83,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
             
             if(contents["DESCRIPTION"] == "fx"){
                 for(auto& fx : contents["CONTENTS"]){
-                    // Add rgb
                     if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
                         page.addParameter(addParameter(fx));
                     }
@@ -129,28 +116,6 @@ void ofxMadOscQuery::createMediaPages(std::map<string, MadParameterPage> &pages,
             if(contents["TYPE"] == "f"){
                 page.addParameter(addParameter(contents));
             }
-            
-            
-            //            if(contents["DESCRIPTION"] == "Opacity"){
-            //                page.addParameter(addParameter(contents));
-            //            }
-            //            if(contents["DESCRIPTION"] == "Color"){
-            //                for(auto& color : contents["CONTENTS"]){
-            //                    // Add rgb
-            //                    if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-            //                        page.addParameter(addParameter(color));
-            //                    }
-            //                }
-            //            }
-            //
-            //            if(contents["DESCRIPTION"] == "fx"){
-            //                for(auto& fx : contents["CONTENTS"]){
-            //                    // Add rgb
-            //                    if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
-            //                        page.addParameter(addParameter(fx));
-            //                    }
-            //                }
-            //            }
         }
         if(!page.isEmpty()){
             pages.insert(std::make_pair(keyword,page));
@@ -170,9 +135,6 @@ void ofxMadOscQuery::oscReceiveMessages(){
         if(m.getAddress() == "/medias/select_by_name"){
             lastSelectedMedia = m.getArgAsString(0);
         }
-//        else if(m.getAddress() == "/surfaces/select_by_name"){
-//            lastSelectedSurface = m.getArgAsString(0);
-//        }
     }
 }
 
@@ -181,9 +143,7 @@ MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
     std::string key = parameterValues["FULL_PATH"];
     parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
     auto val = &parameterMap.operator[](key);
-    
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-    
     return val;
 }
 //--------------------------------------------------------------
@@ -191,9 +151,7 @@ MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string n
     std::string key = parameterValues["FULL_PATH"];
     parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
     auto val = &parameterMap.operator[](key);
-    
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-    
     return val;
 }
 
