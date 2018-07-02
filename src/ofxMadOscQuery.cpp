@@ -21,7 +21,7 @@ ofJson ofxMadOscQuery::receive(){
     ofHttpResponse resp = ofLoadURL(receiveAddress);
 	if(resp.data.size() == 0){
 		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
-		return;
+		return nullptr;
 	}
     std::stringstream ssJSON;
     ssJSON << resp.data;
@@ -43,14 +43,18 @@ void ofxMadOscQuery::setupMadParameterFromJson(MadParameter & newParameter, ofJs
 //--------------------------------------------------------------
 void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
     // Create pages for opacity value for each surface
-    std::string keyword = "opacity";
+    std::string keyword = "SurfaceMixer";
     MadParameterPage page = MadParameterPage(keyword, midiDevice);
     for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
         if(element["DESCRIPTION"] == "selected"){
-            // Skip this one
-            continue;
+            continue; // skip this one
         }
-        page.addParameter(addParameter(element["CONTENTS"][keyword], element["DESCRIPTION"]));
+        // Add parameters
+        for(auto& contents : element["CONTENTS"]){
+            if(contents["DESCRIPTION"] == "Opacity"){
+                page.addParameter(createParameter(contents));
+            }
+        }
     }
     if(!page.isEmpty()){
         pages.push_back(page);
@@ -62,7 +66,7 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
     std::string name = "surface";
     int idx = 0;
     for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
-        if(element["DESCRIPTION"] == "Selected"){
+        if(element["DESCRIPTION"] == "selected"){
             continue; // skip this one
         }
         auto keyword = element["DESCRIPTION"].get<std::string>();//name + "_" + ofToString(idx);
@@ -71,12 +75,12 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
         // Add parameters
         for(auto& contents : element["CONTENTS"]){
             if(contents["DESCRIPTION"] == "Opacity"){
-                page.addParameter(addParameter(contents));
+                page.addParameter(createParameter(contents));
             }
             if(contents["DESCRIPTION"] == "Color"){
                 for(auto& color : contents["CONTENTS"]){
                     if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-                        page.addParameter(addParameter(color));
+                        page.addParameter(createParameter(color));
                     }
                 }
             }
@@ -84,7 +88,7 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
             if(contents["DESCRIPTION"] == "fx"){
                 for(auto& fx : contents["CONTENTS"]){
                     if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
-                        page.addParameter(addParameter(fx));
+                        page.addParameter(createParameter(fx));
                     }
                 }
             }
@@ -114,7 +118,7 @@ void ofxMadOscQuery::createMediaPages(std::map<string, MadParameterPage> &pages,
             }
             
             if(contents["TYPE"] == "f"){
-                page.addParameter(addParameter(contents));
+                page.addParameter(createParameter(contents));
             }
         }
         if(!page.isEmpty()){
@@ -139,17 +143,17 @@ void ofxMadOscQuery::oscReceiveMessages(){
 }
 
 //--------------------------------------------------------------
-MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
+MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues){
     std::string key = parameterValues["FULL_PATH"];
-    parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
+    parameterMap[key] = MadParameter(parameterValues);
     auto val = &parameterMap.operator[](key);
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
     return val;
 }
 //--------------------------------------------------------------
-MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string name){
+MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues, std::string name){
     std::string key = parameterValues["FULL_PATH"];
-    parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
+    parameterMap[key] = MadParameter(parameterValues,name);
     auto val = &parameterMap.operator[](key);
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
     return val;
