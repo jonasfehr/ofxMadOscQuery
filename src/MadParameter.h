@@ -23,6 +23,9 @@ public:
         }
         float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
         this->set(valueNormalized);
+        
+        bSelectable = false;
+        if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
     };
     
     MadParameter(ofJson parameterValues, string name){
@@ -34,6 +37,9 @@ public:
         }
         float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
         this->set(valueNormalized);
+        
+        bSelectable = false;
+        if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
     };
 
 	MadParameter(){};
@@ -44,11 +50,15 @@ public:
         return value;
     }
     
+    bool bSelectable = false;
+    bool isSelectable(){return bSelectable;};
+    
      ofEvent<ofxOscMessage> oscSendEvent;
 
 	string oscAddress;
-	void setOscAddress(string address){ oscAddress = address;}
-    
+    void setOscAddress(string address){ oscAddress = address;}
+    string getOscAddress(){ return oscAddress;}
+
     struct Range{
         float min;
         float max;
