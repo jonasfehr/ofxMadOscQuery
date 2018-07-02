@@ -21,6 +21,10 @@
 class ofxMadOscQuery{
 public:
     
+    ofxMadOscQuery();
+    ~ofxMadOscQuery();
+    
+    
     string receiveAddress = "http://127.0.0.1:8010"; // default madmapper
     ofJson response;
     

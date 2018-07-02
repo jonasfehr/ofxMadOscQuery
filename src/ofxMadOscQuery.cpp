@@ -1,19 +1,19 @@
 #include "ofxMadOscQuery.h"
 
+ofxMadOscQuery::ofxMadOscQuery(){}
+ofxMadOscQuery::~ofxMadOscQuery(){
+    for(auto & parameter : parameterMap){
+        ofRemoveListener(parameter.second.oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
+    }
+}
+
 void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
     this->ip = ip;
     this->sendPort = sendPort;
     this->receivePort = receivePort;
     this->receiveAddress = "http://"+ip+":"+ofToString(8010);
     oscSender.setup(ip, sendPort);
-    
-//
-//    for(auto & page : pages){
-//        for (auto & parameter : *page.getParameters()) {
-//            ofAddListener(parameter.oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-//        }
-//
-//    }
+
 }
 
 //--------------------------------------------------------------
@@ -115,6 +115,9 @@ MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
 	std::string key = parameterValues["FULL_PATH"];
 	parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
 	auto val = &parameterMap.operator[](key);
+    
+    ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
+
 	return val;
 }
 //--------------------------------------------------------------
@@ -122,5 +125,8 @@ MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string n
 	std::string key = parameterValues["FULL_PATH"];
 	parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
 	auto val = &parameterMap.operator[](key);
+    
+    ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
+    
 	return val;
 }
