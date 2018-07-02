@@ -62,32 +62,47 @@ void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxM
 //--------------------------------------------------------------
 void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName){
 	ofJson json = ofLoadJson(fileName);
-	
-	for(auto& param : parameterMap){
-//		std::cout << param.first << endl;
-		
-	}
-	
 	for(auto& page : json["pages"]){
 		std::string name = page["name"];
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
 
 		// Find matching surfaces
 		for(auto& element : page["surfaces"]){
+			std::string elementName = ofToString(element).substr(1, ofToString(element).size() - 2);
+			std::string surfaceName = "/surfaces/" + elementName;
+
 			for(auto& surfaceParam : parameterMap){
-				// Create "upper" name for parameter to be search for
-				std::string surfaceName = "/surfaces/" + ofToString(element).substr(1, ofToString(element).size() - 2);
-				if (ofToString(surfaceParam.first).rfind(surfaceName,0) == 0){
-					ofLog(OF_LOG_NOTICE) << "Found match for " << ofToString(element) << " adding to custom page";
+				std::string paramName = ofToString(surfaceParam.first);
+				
+				std::cout << elementName << " " << paramName << endl;
+			
+				
+				if(elementName == "*"){
+					// WILDCARD - take all matching element
+					if((surfaceParam.first.rfind("/surfaces/", 0) == 0) && !(surfaceParam.first.rfind("/surfaces/selected", 0) == 0)){
+						customPage.addParameter(&surfaceParam.second);
+					}
+				}else if(elementName == paramName){
+					// only take the matching
 					customPage.addParameter(&surfaceParam.second);
+				}else{
+					auto parsedName = elementName.substr(2, ofToString(element).size());
+					// split by "/"
+					std::vector<std::string> seglist;
+					std::stringstream ss(paramName);
+					std::string segment;
+					while(std::getline(ss, segment, '/')){
+						seglist.push_back(segment);
+					}
+					
+					if(seglist[3] == parsedName && seglist[2] != "selected"){
+						customPage.addParameter(&surfaceParam.second);
+					}
 				}
 			}
 		}
 		pages.push_front(customPage);
 	}
-	// read type e.g. surfaces
-	// read name e.g. Polar
-	// add all parameters
 }
 
 //--------------------------------------------------------------
