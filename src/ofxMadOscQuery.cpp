@@ -41,24 +41,56 @@ void ofxMadOscQuery::setupMadParameterFromJson(MadParameter & newParameter, ofJs
 }
 
 //--------------------------------------------------------------
-void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
-    // Create pages for opacity value for each surface
-    std::string keyword = "SurfaceMixer";
-    MadParameterPage page = MadParameterPage(keyword, midiDevice);
-    for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
-        if(element["DESCRIPTION"] == "selected"){
-            continue; // skip this one
-        }
-        // Add parameters
-        for(auto& contents : element["CONTENTS"]){
-            if(contents["DESCRIPTION"] == "Opacity"){
-                page.addParameter(createParameter(contents));
-            }
-        }
-    }
-    if(!page.isEmpty()){
-        pages.push_back(page);
-    }
+void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName){
+	ofJson json = ofLoadJson(fileName);
+	for(auto& page : json["pages"]){
+		std::string name = page["name"];
+		MadParameterPage customPage = MadParameterPage(name, midiDevice);
+
+		// Find matching surfaces
+		for(auto& element : page["surfaces"]){
+			addParameterToCustomPage(element, "surfaces", &customPage);
+		}
+		// Find matching fixtures
+		for(auto& element : page["fixtures"]){
+			addParameterToCustomPage(element, "fixtures", &customPage);
+		}
+		// Find matching medias
+		for(auto& element : page["medias"]){
+			addParameterToCustomPage(element, "medias", &customPage);
+		}
+		pages.push_front(customPage);
+	}
+}
+//--------------------------------------------------------------
+void ofxMadOscQuery::addParameterToCustomPage(ofJson element, std::string type, MadParameterPage* customPage){
+	std::string elementName = ofToString(element).substr(1, ofToString(element).size() - 2);
+	std::string typeName = "/" + type +"/";
+	
+	for(auto& surfaceParam : parameterMap){
+		std::string paramName = ofToString(surfaceParam.first);
+		if(elementName == "*"){
+			// WILDCARD - take all matching element
+			if((surfaceParam.first.rfind(typeName, 0) == 0) && !(surfaceParam.first.rfind(typeName + "selected", 0) == 0)){
+				(*customPage).addParameter(&surfaceParam.second);
+			}
+		}else if(elementName == paramName){
+			// only take the matching
+			(*customPage).addParameter(&surfaceParam.second);
+		}else{
+			auto parsedName = elementName.substr(2, ofToString(element).size());
+			// split by "/"
+			std::vector<std::string> seglist;
+			std::stringstream ss(paramName);
+			std::string segment;
+			while(std::getline(ss, segment, '/')){
+				seglist.push_back(segment);
+			}
+			if(seglist[3] == parsedName && seglist[2] != "selected"){
+				(*customPage).addParameter(&surfaceParam.second);
+			}
+		}
+	}
 }
 
 //--------------------------------------------------------------
