@@ -20,8 +20,6 @@ public:
         if(!parameterValues["RANGE"].is_null() ){
             range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
             range.max = parameterValues["RANGE"].at(0)["MAX"].get<float>();
-            //            this->setMin(parameterValues["RANGE"].at(0)["MIN"]);
-            //            this->setMax(parameterValues["RANGE"].at(0)["MAX"]);
         }
         float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
         this->set(valueNormalized);
@@ -33,8 +31,6 @@ public:
         if(!parameterValues["RANGE"].is_null() ){
             range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
             range.max = parameterValues["RANGE"].at(0)["MAX"].get<float>();
-            //            this->setMin(parameterValues["RANGE"].at(0)["MIN"]);
-            //            this->setMax(parameterValues["RANGE"].at(0)["MAX"]);
         }
         float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
         this->set(valueNormalized);

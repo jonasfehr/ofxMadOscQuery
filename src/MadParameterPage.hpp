@@ -30,11 +30,13 @@ public:
 		range = std::make_pair(1, upper);
 	}
 	
-	void sortParametes(){
-		// sorts parameters
-		if(parameters.size() < 1){
-			ofLog(OF_LOG_ERROR) << "Add all parameters before sorting!";
+	void setLowerBound(int lower){
+		int upper = lower + 7;
+		if(upper > parameters.size()) {
+			upper = parameters.size();
+			lower = 1;
 		}
+		range = std::make_pair(lower, upper);
 	}
 	
 	bool isEmpty(){
