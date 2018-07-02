@@ -20,16 +20,18 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
 //--------------------------------------------------------------
 ofJson ofxMadOscQuery::receive(){
     ofHttpResponse resp = ofLoadURL(receiveAddress);
-    
+	if(resp.data.size() == 0){
+		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
+		return;
+	}
+
     // catch if not connected
-    
     if(resp.error == "Couldn't connect to server"){
         return;
     }
     std::stringstream ssJSON;
     ssJSON << resp.data;
     ssJSON >> response;
-    
     return response;
 }
 
