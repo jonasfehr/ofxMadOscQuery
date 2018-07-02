@@ -51,8 +51,8 @@ public:
 		return &this->parameters;
 	}
 	
-	void cycleForward(float & p){
-		if(range.second < parameters.size() && p == 1){
+	void cycleForward(){
+		if(range.second < parameters.size()){
 			ofLog() << "Cycling forwards - new range: " << range.first << " to " << range.second;
 			unlinkDevice();
 			range.first++;
@@ -61,8 +61,8 @@ public:
 		}
 	}
 	
-	void cycleBackward(float & p){
-		if(range.first > 1 && p == 1){
+	void cycleBackward(){
+		if(range.first > 1){
 			ofLog() << "Cycling backwards - new range: " << range.first << " to " << range.second;
 			unlinkDevice();
 			range.first--;
@@ -97,16 +97,6 @@ public:
 	
 	std::pair<int,int> getRange(){
 		return range;
-	}
-	
-	void linkCycleControlComponents(MidiComponent &midiComponentForward,MidiComponent &midiComponentBackward){
-		midiComponentForward.value.addListener(this, &MadParameterPage::cycleForward);
-		midiComponentBackward.value.addListener(this, &MadParameterPage::cycleBackward);
-	}
-	
-	void unlinkCycleControlComponents(MidiComponent &midiComponentForward,MidiComponent &midiComponentBackward){
-		midiComponentForward.value.removeListener(this, &MadParameterPage::cycleForward);
-		midiComponentBackward.value.removeListener(this, &MadParameterPage::cycleBackward);
 	}
 	
 private:
