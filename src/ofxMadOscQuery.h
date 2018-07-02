@@ -52,7 +52,7 @@ public:
     void createOpacityPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
     void createSurfacePages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
     void createMediaPages(std::map<string, MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
-    
+	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName);
     std::string getStatusString();
 	
 	MadParameter* addParameter(ofJson parameterValues);

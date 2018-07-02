@@ -14,7 +14,6 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
     this->receiveAddress = "http://"+ip+":"+ofToString(8010);
     oscSender.setup(ip, sendPort);
     oscReceiver.setup(receivePort);
-
 }
 
 //--------------------------------------------------------------
@@ -22,13 +21,8 @@ ofJson ofxMadOscQuery::receive(){
     ofHttpResponse resp = ofLoadURL(receiveAddress);
 	if(resp.data.size() == 0){
 		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
-		return;
+		return nullptr;
 	}
-
-    // catch if not connected
-    if(resp.error == "Couldn't connect to server"){
-        return;
-    }
     std::stringstream ssJSON;
     ssJSON << resp.data;
     ssJSON >> response;
@@ -58,14 +52,42 @@ void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxM
             // Skip this one
             continue;
         }
-        // Add element
-        //        page.addParameter(addParameter(MadParameter(element["CONTENTS"][keyword], element["DESCRIPTION"])));
         page.addParameter(addParameter(element["CONTENTS"][keyword], element["DESCRIPTION"]));
     }
     
     if(!page.isEmpty()){
         pages.push_back(page);
     }
+}
+//--------------------------------------------------------------
+void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName){
+	ofJson json = ofLoadJson(fileName);
+	
+	for(auto& param : parameterMap){
+//		std::cout << param.first << endl;
+		
+	}
+	
+	for(auto& page : json["pages"]){
+		std::string name = page["name"];
+		MadParameterPage customPage = MadParameterPage(name, midiDevice);
+
+		// Find matching surfaces
+		for(auto& element : page["surfaces"]){
+			for(auto& surfaceParam : parameterMap){
+				// Create "upper" name for parameter to be search for
+				std::string surfaceName = "/surfaces/" + ofToString(element).substr(1, ofToString(element).size() - 2);
+				if (ofToString(surfaceParam.first).rfind(surfaceName,0) == 0){
+					ofLog(OF_LOG_NOTICE) << "Found match for " << ofToString(element) << " adding to custom page";
+					customPage.addParameter(&surfaceParam.second);
+				}
+			}
+		}
+		pages.push_front(customPage);
+	}
+	// read type e.g. surfaces
+	// read name e.g. Polar
+	// add all parameters
 }
 
 //--------------------------------------------------------------
@@ -95,7 +117,6 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
             
             if(contents["DESCRIPTION"] == "fx"){
                 for(auto& fx : contents["CONTENTS"]){
-                    // Add rgb
                     if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
                         page.addParameter(addParameter(fx));
                     }
