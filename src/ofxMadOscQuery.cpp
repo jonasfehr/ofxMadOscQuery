@@ -13,6 +13,7 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
     this->receivePort = receivePort;
     this->receiveAddress = "http://"+ip+":"+ofToString(8010);
     oscSender.setup(ip, sendPort);
+    oscReceiver.setup(receivePort);
 
 }
 
@@ -56,10 +57,10 @@ void ofxMadOscQuery::createOpacityPages(std::list<MadParameterPage> &pages, ofxM
             continue;
         }
         // Add element
-//        page.addParameter(addParameter(MadParameter(element["CONTENTS"][keyword], element["DESCRIPTION"])));
+        //        page.addParameter(addParameter(MadParameter(element["CONTENTS"][keyword], element["DESCRIPTION"])));
         page.addParameter(addParameter(element["CONTENTS"][keyword], element["DESCRIPTION"]));
     }
-        
+    
     if(!page.isEmpty()){
         pages.push_back(page);
     }
@@ -70,7 +71,7 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
     std::string name = "surface";
     int idx = 0;
     for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
-        if(element["DESCRIPTION"] == "selected"){
+        if(element["DESCRIPTION"] == "Selected"){
             continue; // skip this one
         }
         auto keyword = element["DESCRIPTION"].get<std::string>();//name + "_" + ofToString(idx);
@@ -106,27 +107,91 @@ void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxM
     }
 }
 //--------------------------------------------------------------
+void ofxMadOscQuery::createMediaPages(std::map<string, MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
+    for(auto & element : json["CONTENTS"]["medias"]["CONTENTS"]){
+        // exceptions not to add
+        if(element["DESCRIPTION"] == "Next" || element["DESCRIPTION"] == "Per Type Selection" || element["DESCRIPTION"] == "Previous" || element["DESCRIPTION"] == "Select" || element["DESCRIPTION"] == "Select By Name" || element["DESCRIPTION"] == "Selected"){
+            continue; // skip this one
+        }
+        
+        auto keyword = element["DESCRIPTION"].get<std::string>();
+        MadParameterPage page = MadParameterPage(keyword, midiDevice);
+        
+        // Add parameters
+        for(auto& contents : element["CONTENTS"]){
+            // exception not to add
+            if(contents["DESCRIPTION"] == "Resolution" || contents["DESCRIPTION"] == "Assign To Selected Surfaces" || contents["DESCRIPTION"] == "Assign To All Surfaces" || contents["DESCRIPTION"] == "Restart" || contents["DESCRIPTION"] == "Select" || contents["DESCRIPTION"] == "mappingImage"){
+                continue; // skip this one
+            }
+            
+            if(contents["TYPE"] == "f"){
+                page.addParameter(addParameter(contents));
+            }
+            
+            
+            //            if(contents["DESCRIPTION"] == "Opacity"){
+            //                page.addParameter(addParameter(contents));
+            //            }
+            //            if(contents["DESCRIPTION"] == "Color"){
+            //                for(auto& color : contents["CONTENTS"]){
+            //                    // Add rgb
+            //                    if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
+            //                        page.addParameter(addParameter(color));
+            //                    }
+            //                }
+            //            }
+            //
+            //            if(contents["DESCRIPTION"] == "fx"){
+            //                for(auto& fx : contents["CONTENTS"]){
+            //                    // Add rgb
+            //                    if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
+            //                        page.addParameter(addParameter(fx));
+            //                    }
+            //                }
+            //            }
+        }
+        if(!page.isEmpty()){
+            pages.insert(std::make_pair(keyword,page));
+        }
+    }
+}
+//--------------------------------------------------------------
 void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
     oscSender.sendMessage(m, false);
 }
 
+void ofxMadOscQuery::oscReceiveMessages(){
+    while(oscReceiver.hasWaitingMessages()){
+        ofxOscMessage m;
+        oscReceiver.getNextMessage(m);
+        
+        if(m.getAddress() == "/medias/select_by_name"){
+            lastSelectedMedia = m.getArgAsString(0);
+        }
+//        else if(m.getAddress() == "/surfaces/select_by_name"){
+//            lastSelectedSurface = m.getArgAsString(0);
+//        }
+    }
+}
+
 //--------------------------------------------------------------
 MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues){
-	std::string key = parameterValues["FULL_PATH"];
-	parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
-	auto val = &parameterMap.operator[](key);
+    std::string key = parameterValues["FULL_PATH"];
+    parameterMap.insert(std::make_pair(key,MadParameter(parameterValues)));
+    auto val = &parameterMap.operator[](key);
     
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-
-	return val;
+    
+    return val;
 }
 //--------------------------------------------------------------
 MadParameter* ofxMadOscQuery::addParameter(ofJson parameterValues, std::string name){
-	std::string key = parameterValues["FULL_PATH"];
-	parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
-	auto val = &parameterMap.operator[](key);
+    std::string key = parameterValues["FULL_PATH"];
+    parameterMap.insert(std::make_pair(key, MadParameter(parameterValues, name)));
+    auto val = &parameterMap.operator[](key);
     
     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
     
-	return val;
+    return val;
 }
+

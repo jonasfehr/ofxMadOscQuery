@@ -29,22 +29,29 @@ public:
     ofJson response;
     
     ofxOscSender oscSender;
+    ofxOscReceiver oscReceiver;
 
     ofxPanel gui;
 
     string ip;
+    
+    string lastSelectedMedia;
+//    string lastSelectedSurface;
+
     int sendPort, receivePort;
     
     void setup(string ip, int sendPort, int receivePort);
     
     void oscSendToMadMapper(ofxOscMessage &m);
+    
+    void oscReceiveMessages();
 
     ofJson receive();
     void setupMadParameterFromJson(MadParameter & newParameter, ofJson jsonParameterValues);
 
     void createOpacityPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
     void createSurfacePages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
-    void createMediaPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
+    void createMediaPages(std::map<string, MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
     
     std::string getStatusString();
 	
