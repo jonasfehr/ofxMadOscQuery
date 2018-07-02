@@ -73,10 +73,6 @@ void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMid
 
 			for(auto& surfaceParam : parameterMap){
 				std::string paramName = ofToString(surfaceParam.first);
-				
-				std::cout << elementName << " " << paramName << endl;
-			
-				
 				if(elementName == "*"){
 					// WILDCARD - take all matching element
 					if((surfaceParam.first.rfind("/surfaces/", 0) == 0) && !(surfaceParam.first.rfind("/surfaces/selected", 0) == 0)){
@@ -94,7 +90,6 @@ void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMid
 					while(std::getline(ss, segment, '/')){
 						seglist.push_back(segment);
 					}
-					
 					if(seglist[3] == parsedName && seglist[2] != "selected"){
 						customPage.addParameter(&surfaceParam.second);
 					}
