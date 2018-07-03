@@ -79,6 +79,7 @@ void ofxMadOscQuery::addParameterToCustomPage(ofJson element, std::string type, 
 			// only take the matching
 			(*customPage).addParameter(&surfaceParam.second);
 		}else if(matchesGroupWildcard(paramName, elementName)){
+			// Find matching parameters from groups
 			(*customPage).addParameter(&surfaceParam.second);
 		}else{
 			auto parsedName = elementName.substr(2, ofToString(element).size());
@@ -110,14 +111,12 @@ bool ofxMadOscQuery::matchesGroupWildcard(std::string paramName, std::string ele
 
 	for(int i = segList.size(); i > 1; i--){
 		auto segment = segList[i];
-
 		if(elementName.find(segment) != std::string::npos && // if segment found
 		   segment != "Group" &&
 		   segment != ""){
 			return true;
 		}
 	}
-	
 	return false;
 }
 
