@@ -49,6 +49,19 @@ public:
         float value = ofMap(this->get(), 0, 1, range.min, range.max);
         return value;
     }
+	
+	std::string getParameterName(){
+		// returns last part of osc address
+		// "/bla/foo/blue" returns "blue"
+		std::string oscAddress = this->getOscAddress();
+		std::vector<std::string> seglist;
+		std::stringstream ss(oscAddress);
+		std::string segment;
+		while(std::getline(ss, segment, '/')){
+			seglist.push_back(segment);
+		}
+		return seglist.at(seglist.size()-1);
+	}
     
     bool bSelectable = false;
     bool isSelectable(){return bSelectable;};

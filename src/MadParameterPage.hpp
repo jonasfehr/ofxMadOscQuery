@@ -9,22 +9,21 @@
 
 class MadParameterPage{
 public:
-    MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false){
+	MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false){
 		this->name = name;
 		this->midiDevice = midiDevice;
 		ofLog() << "Constructor for " << this->name << " called!" << endl;
-        bSubpage = isSubpage;
-
+		bSubpage = isSubpage;
 	};
 	
 	void addParameter(MadParameter* parameter){
-		if(this->name != "opacity"){
-			auto par = parameter->getName();
-			if(par == this->name || par == "Red" ||
-			   par == "Green" || par == "Blue"){
+		std::string paramName = parameter->getParameterName();
+		if(this->name != "opacity"){			
+			if(paramName == "opacity" || paramName == "red" || paramName == "green" || paramName == "blue"){
+				list<MadParameter*>::iterator it = parameters.begin();
 				parameters.push_front(parameter);
 			}else{
-        		parameters.push_back(parameter);
+				parameters.push_back(parameter);
 			}
 		}
 		int upper = parameters.size(); // set range
@@ -98,21 +97,21 @@ public:
 	}
 	
 	std::pair<int,int> getRange(){
-        if(parameters.size()>0 && range.first == 0){
-            int lower = 1;
-            int upper = parameters.size(); // set range
-            if(upper > 8)upper = 8;
-            range = std::make_pair(lower, upper);
-        }
-        
-        
+		if(parameters.size()>0 && range.first == 0){
+			int lower = 1;
+			int upper = parameters.size(); // set range
+			if(upper > 8)upper = 8;
+			range = std::make_pair(lower, upper);
+		}
+		
+		
 		return range;
 	}
-    
-    bool isSubpage(){return bSubpage;}
+	
+	bool isSubpage(){return bSubpage;}
 	
 private:
-    bool bSubpage;
+	bool bSubpage;
 	std::list<MadParameter*> parameters;
 	std::string name = "";
 	std::pair<int, int> range;
