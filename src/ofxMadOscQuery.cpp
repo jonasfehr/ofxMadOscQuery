@@ -18,16 +18,16 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
 
 //--------------------------------------------------------------
 ofJson ofxMadOscQuery::receive(){
-	ofHttpResponse resp = ofLoadURL(receiveAddress);
-	if(resp.data.size() == 0){
-		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
-		return nullptr;
-	}
-	ofJson response;
-	std::stringstream ssJSON;
-	ssJSON << resp.data;
-	ssJSON >> response;
-	return response;
+    ofHttpResponse resp = ofLoadURL(receiveAddress);
+    if(resp.data.size() == 0){
+        ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
+        return nullptr;
+    }
+    ofJson response;
+    std::stringstream ssJSON;
+    ssJSON << resp.data;
+    ssJSON >> response;
+    return response;
 }
 
 //--------------------------------------------------------------
@@ -123,58 +123,149 @@ bool ofxMadOscQuery::matchesGroupWildcard(std::string paramName, std::string ele
 
 //--------------------------------------------------------------
 void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
-	auto keyTypes = {"surfaces", "medias", "fixtures"};
-	for(auto & keyType : keyTypes){
-		for(auto & element : json["CONTENTS"][keyType]["CONTENTS"]){
-			// exceptions not to add
-			
-			// Skip fixed descriptions
-			auto skipDescriptions = {"Next", "Per Type Selection", "Previous", "Select","Select By Name","Selected", "selected"}; // Descriptions for surfaces, medias & fixtures
-			for(auto & skipDescription : skipDescriptions){
-				if(element["DESCRIPTION"] == skipDescription) continue;
-			}
-			
-			auto keyword = element["DESCRIPTION"].get<std::string>();
-			MadParameterPage page = MadParameterPage(keyword, midiDevice, true);
-			
-			// Add parameters
-			for(auto& contents : element["CONTENTS"]){
-				// exception not to add
-				// Skip fixed descriptions
-				auto skipDescriptions = {"Resolution", "Assign To Selected Surfaces", "Assign To All Surfaces", "Restart","Select", "selected"}; // Descriptions for surfaces, medias & fixtures
-				for(auto & skipDescription : skipDescriptions){
-					if(element["DESCRIPTION"] == skipDescription) continue;
-				}
-				
-				if(contents["DESCRIPTION"] == "Opacity"){
-					page.addParameter(createParameter(contents));
-				}
-				if(contents["DESCRIPTION"] == "Color"){
-					for(auto& color : contents["CONTENTS"]){
-						if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-							page.addParameter(createParameter(color));
-						}
-					}
-				}
-				
-				if(contents["DESCRIPTION"] == "fx"){
-					for(auto& fx : contents["CONTENTS"]){
-						if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
-							page.addParameter(createParameter(fx));
-						}
-					}
-				}
-				
-				
-				if(keyType == "medias" && contents["TYPE"] == "f"){
-					page.addParameter(createParameter(contents));
-				}
-			}
-			if(!page.isEmpty()){
-				pages.push_back(page);
-			}
-		}
-	}
+    auto keyTypes = {"surfaces", "medias", "fixtures"};
+    for(auto & keyType : keyTypes){
+        for(auto & element : json["CONTENTS"][keyType]["CONTENTS"]){
+            // exceptions not to add
+            
+            // Skip fixed descriptions
+            auto skipDescriptions = {"Next", "Per Type Selection", "Previous", "Select","Select By Name","Selected", "selected"}; // Descriptions for surfaces, medias & fixtures
+            bool shouldSkip = false;
+            for(auto & skipDescription : skipDescriptions){
+                if(element["DESCRIPTION"] == skipDescription){
+                    shouldSkip = true;
+                    break;
+                }
+            }
+            if(shouldSkip) continue;
+            
+            auto keyword = element["DESCRIPTION"].get<std::string>();
+            MadParameterPage page = MadParameterPage(keyword, midiDevice, true);
+            
+            setupPageFromJson(pages, page, midiDevice, element, keyType);
+            
+            // Add parameters
+            
+            if(!page.isEmpty()){
+                pages.push_back(page);
+            }
+        }
+    }
+}
+bool ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> &pages, MadParameterPage & page, ofxMidiDevice* midiDevice, ofJson element, string keyType){
+    
+//    bool bIsGroup = false;
+//    // detect Groups
+//    if (keyType=="surfaces" && element["CONTENTS"]["invert_mask"].is_null()){
+//        cout << "Detected as Group" << endl;
+//        bIsGroup = true;
+//
+//
+//    }
+//    else if(keyType=="fixtures" && element["CONTENTS"].size()>9){
+//        cout << "Detected as Group" << endl;
+//        bIsGroup = true;
+//    }
+//    page.setIsGroup(bIsGroup);
+//
+//    if(bIsGroup && element["DESCRIPTION"].is_string()){
+//        auto keyword = element["DESCRIPTION"].get<std::string>()+"_SubPage";
+//        string searchString = "/surfaces/"+keyword+"/*/opacity";
+//
+//        cout << searchString << endl;
+//
+//
+//        ofJson customJson = "{ \"pages\": [{\"name\": "+keyword+", \"surfaces\": ["+searchString+"]}]}";
+//
+//        //createCustomPage(pages, midiDevice, customJson);
+//    }
+    
+    for(auto& contents : element["CONTENTS"]){
+        if(contents["DESCRIPTION"].is_null() || !contents["DESCRIPTION"].is_string()) continue;
+        // exception not to add
+        // Skip fixed descriptions
+        
+        auto skipDescriptions = {"Resolution", "Assign To Selected Surfaces", "Assign To All Surfaces", "Restart","Select", "selected"}; // Descriptions for surfaces, medias & fixtures
+        bool shouldSkip = false;
+        for(auto & skipDescription : skipDescriptions){
+            if(element["CONTENTS"]["DESCRIPTION"] == skipDescription){
+                shouldSkip = true;
+                return;
+            }
+        }
+        if(shouldSkip) continue;
+        
+        if(contents["DESCRIPTION"] == "Opacity"){
+            MadParameter * newOpacityParameter = createParameter(contents);
+            page.addParameter(newOpacityParameter);
+            
+            // detect if it is a groupe
+            bool bIsGroup = false;
+            // detect Groups
+            if (keyType=="surfaces" && element["CONTENTS"]["invert_mask"].is_null()){
+                cout << "Detected as Group" << endl;
+                bIsGroup = true;
+            }else if(keyType=="fixtures" && element["CONTENTS"].size()>10){
+                cout << "Detected as Group" << endl;
+                bIsGroup = true;
+            }else return;
+            
+            newOpacityParameter->setIsGroup(bIsGroup);
+            
+            auto groupName = element["DESCRIPTION"].get<std::string>();
+            MadParameterPage subPage = MadParameterPage(groupName, midiDevice, true);
+            setupPageFromJson(pages, subPage, midiDevice, contents["CONTENTS"], keyType);
+            
+            // create opacity subpage for all surfaces/fixtures in the group
+                string searchString = "/surfaces/"+groupName+"/*/opacity";
+            
+                
+                ofJson customJson = "{ \"pages\": [{\"name\": \""+groupName+"_SubPage\", \"surfaces\": ["+searchString+"]}]}";
+                
+                //createCustomPage(pages, midiDevice, customJson);
+            
+            
+                // create pages for elements in group
+                
+//                // Skip fixed descriptions
+//                auto skipDescriptionsForGroup = {"Blend Mode", "Color", "Input", "Opacity","Output", "Select", "Visible", "Visual", "Luminosity", "Response", "Sliders"}; // Descriptions for surfaces, medias & fixtures
+//                bool shouldSkip = false;
+//                for(auto & skipDescription : skipDescriptionsForGroup){
+//                    if(contents["DESCRIPTION"] == skipDescription){
+//                        shouldSkip=true;
+//                        break;
+//                    }
+//                }
+//                if(shouldSkip) continue;
+            
+                // create a page for the surfaces/fixtures in the group
+
+                
+//            }
+
+            
+        }
+        if(contents["DESCRIPTION"] == "Color"){
+            for(auto& color : contents["CONTENTS"]){
+                if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
+                    page.addParameter(createParameter(color));
+                }
+            }
+        }
+        
+        if(contents["DESCRIPTION"] == "fx"){
+            for(auto& fx : contents["CONTENTS"]){
+                if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
+                    page.addParameter(createParameter(fx));
+                }
+            }
+        }
+        
+        
+        if(keyType == "medias" && contents["TYPE"] == "f"){
+            page.addParameter(createParameter(contents));
+        }
+    }
 }
 //--------------------------------------------------------------
 void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
@@ -182,18 +273,18 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 }
 
 void ofxMadOscQuery::oscReceiveMessages(){
-	while(oscReceiver.hasWaitingMessages()){
-		ofxOscMessage m;
-		oscReceiver.getNextMessage(m);
-		ofLog() << "Received Messafe " << lastSelectedMedia << endl;
-		
-		if(m.getAddress() == "/medias/select_by_name"){
-			lastSelectedMedia = m.getArgAsString(0);
-			ofLog() << "Connected Media " << lastSelectedMedia << endl;
-			
-			ofNotifyEvent(mediaNameE, lastSelectedMedia, this);
-		}
-	}
+    while(oscReceiver.hasWaitingMessages()){
+        ofxOscMessage m;
+        oscReceiver.getNextMessage(m);
+        ofLog() << "Received Messafe " << lastSelectedMedia << endl;
+        
+        if(m.getAddress() == "/medias/select_by_name"){
+            lastSelectedMedia = m.getArgAsString(0);
+            ofLog() << "Connected Media " << lastSelectedMedia << endl;
+            
+            ofNotifyEvent(mediaNameE, lastSelectedMedia, this);
+        }
+    }
 }
 
 //--------------------------------------------------------------
@@ -212,4 +303,5 @@ MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues, std::strin
 	ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
 	return val;
 }
+
 

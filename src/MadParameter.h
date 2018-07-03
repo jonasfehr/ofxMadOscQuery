@@ -26,6 +26,7 @@ public:
         
         bSelectable = false;
         if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
+        bIsGroup = false;
     };
     
     MadParameter(ofJson parameterValues, string name){
@@ -40,6 +41,7 @@ public:
         
         bSelectable = false;
         if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
+        bIsGroup = false;
     };
 
 	MadParameter(){};
@@ -76,6 +78,11 @@ public:
         float min;
         float max;
     } range;
+    
+    bool isGroup(){return bIsGroup;}
+    void setIsGroup(bool isGroup){bIsGroup = isGroup;}
+    bool bIsGroup;
+
     	
 	// Send OSC when parameter changed
 	void onParameterChange(float & p){
