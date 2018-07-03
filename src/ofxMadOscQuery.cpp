@@ -98,6 +98,7 @@ void ofxMadOscQuery::addParameterToCustomPage(ofJson element, std::string type, 
 }
 //--------------------------------------------------------------
 bool ofxMadOscQuery::matchesGroupWildcard(std::string paramName, std::string elementName){
+	// returns true if paramName matches a groups and has a wildcard "*"
 	if(paramName.find("Group") == std::string::npos){
 		return false;
 	}
@@ -109,7 +110,7 @@ bool ofxMadOscQuery::matchesGroupWildcard(std::string paramName, std::string ele
 		segList.push_back(segment);
 	}
 
-	for(int i = segList.size(); i > 1; i--){
+	for(int i = segList.size()-1; i > 1; i--){
 		auto segment = segList[i];
 		if(elementName.find(segment) != std::string::npos && // if segment found
 		   segment != "Group" &&
