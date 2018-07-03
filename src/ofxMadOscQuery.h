@@ -26,7 +26,6 @@ public:
     
     
     string receiveAddress = "http://127.0.0.1:8010"; // default madmapper
-    ofJson response;
     
     ofxOscSender oscSender;
     ofxOscReceiver oscReceiver;
@@ -49,8 +48,7 @@ public:
     ofJson receive();
     void setupMadParameterFromJson(MadParameter & newParameter, ofJson jsonParameterValues);
 
-    void createSurfacePages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
-    void createMediaPages(std::map<string, MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
+    void createSubPages(std::list<MadParameterPage> &page, ofxMidiDevice* midiDevice, ofJson json);
 	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName);
     std::string getStatusString();
 	
@@ -58,4 +56,6 @@ public:
 	MadParameter* createParameter(ofJson parameterValues, std::string name);
 	void addParameterToCustomPage(ofJson element, std::string type, MadParameterPage* customPage);
 	std::map<std::string, MadParameter> parameterMap;
+    
+    ofEvent<string> mediaNameE;
 };

@@ -9,10 +9,12 @@
 
 class MadParameterPage{
 public:
-	MadParameterPage(std::string name, ofxMidiDevice* midiDevice){
+    MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false){
 		this->name = name;
 		this->midiDevice = midiDevice;
 		ofLog() << "Constructor for " << this->name << " called!" << endl;
+        bSubpage = isSubpage;
+
 	};
 	
 	void addParameter(MadParameter* parameter){
@@ -96,10 +98,21 @@ public:
 	}
 	
 	std::pair<int,int> getRange(){
+        if(parameters.size()>0 && range.first == 0){
+            int lower = 1;
+            int upper = parameters.size(); // set range
+            if(upper > 8)upper = 8;
+            range = std::make_pair(lower, upper);
+        }
+        
+        
 		return range;
 	}
+    
+    bool isSubpage(){return bSubpage;}
 	
 private:
+    bool bSubpage;
 	std::list<MadParameter*> parameters;
 	std::string name = "";
 	std::pair<int, int> range;

@@ -23,6 +23,7 @@ ofJson ofxMadOscQuery::receive(){
 		ofLog(OF_LOG_FATAL_ERROR) << "MadMapper not open!" << endl;
 		return nullptr;
 	}
+    ofJson response;
     std::stringstream ssJSON;
     ssJSON << resp.data;
     ssJSON >> response;
@@ -94,67 +95,57 @@ void ofxMadOscQuery::addParameterToCustomPage(ofJson element, std::string type, 
 }
 
 //--------------------------------------------------------------
-void ofxMadOscQuery::createSurfacePages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
-    std::string name = "surface";
-    int idx = 0;
-    for(auto & element : json["CONTENTS"]["surfaces"]["CONTENTS"]){
-        if(element["DESCRIPTION"] == "selected"){
-            continue; // skip this one
-        }
-        auto keyword = element["DESCRIPTION"].get<std::string>();//name + "_" + ofToString(idx);
-        MadParameterPage page = MadParameterPage(keyword, midiDevice);
-        
-        // Add parameters
-        for(auto& contents : element["CONTENTS"]){
-            if(contents["DESCRIPTION"] == "Opacity"){
-                page.addParameter(createParameter(contents));
-            }
-            if(contents["DESCRIPTION"] == "Color"){
-                for(auto& color : contents["CONTENTS"]){
-                    if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
-                        page.addParameter(createParameter(color));
-                    }
-                }
+void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
+    auto keyTypes = {"surfaces", "medias", "fixtures"};
+    for(auto & keyType : keyTypes){
+        for(auto & element : json["CONTENTS"][keyType]["CONTENTS"]){
+            // exceptions not to add
+            
+            // Skip fixed descriptions
+            auto skipDescriptions = {"Next", "Per Type Selection", "Previous", "Select","Select By Name","Selected", "selected"}; // Descriptions for surfaces, medias & fixtures
+            for(auto & skipDescription : skipDescriptions){
+                if(element["DESCRIPTION"] == skipDescription) continue;
             }
             
-            if(contents["DESCRIPTION"] == "fx"){
-                for(auto& fx : contents["CONTENTS"]){
-                    if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
-                        page.addParameter(createParameter(fx));
+            auto keyword = element["DESCRIPTION"].get<std::string>();
+            MadParameterPage page = MadParameterPage(keyword, midiDevice, true);
+            
+            // Add parameters
+            for(auto& contents : element["CONTENTS"]){
+                // exception not to add
+                // Skip fixed descriptions
+                auto skipDescriptions = {"Resolution", "Assign To Selected Surfaces", "Assign To All Surfaces", "Restart","Select", "selected"}; // Descriptions for surfaces, medias & fixtures
+                for(auto & skipDescription : skipDescriptions){
+                    if(element["DESCRIPTION"] == skipDescription) continue;
+                }
+                
+                if(contents["DESCRIPTION"] == "Opacity"){
+                    page.addParameter(createParameter(contents));
+                }
+                if(contents["DESCRIPTION"] == "Color"){
+                    for(auto& color : contents["CONTENTS"]){
+                        if(color["DESCRIPTION"] == "Red" || color["DESCRIPTION"] == "Green" || color["DESCRIPTION"] == "Blue"){
+                            page.addParameter(createParameter(color));
+                        }
                     }
                 }
+                
+                if(contents["DESCRIPTION"] == "fx"){
+                    for(auto& fx : contents["CONTENTS"]){
+                        if( fx["DESCRIPTION"] != "FX Type" && fx["TYPE"]=="f"){
+                            page.addParameter(createParameter(fx));
+                        }
+                    }
+                }
+       
+                
+                if(keyType == "medias" && contents["TYPE"] == "f"){
+                    page.addParameter(createParameter(contents));
+                }
             }
-        }
-        if(!page.isEmpty()){
-            pages.push_back(page);
-            idx++;
-        }
-    }
-}
-//--------------------------------------------------------------
-void ofxMadOscQuery::createMediaPages(std::map<string, MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
-    for(auto & element : json["CONTENTS"]["medias"]["CONTENTS"]){
-        // exceptions not to add
-        if(element["DESCRIPTION"] == "Next" || element["DESCRIPTION"] == "Per Type Selection" || element["DESCRIPTION"] == "Previous" || element["DESCRIPTION"] == "Select" || element["DESCRIPTION"] == "Select By Name" || element["DESCRIPTION"] == "Selected"){
-            continue; // skip this one
-        }
-        
-        auto keyword = element["DESCRIPTION"].get<std::string>();
-        MadParameterPage page = MadParameterPage(keyword, midiDevice);
-        
-        // Add parameters
-        for(auto& contents : element["CONTENTS"]){
-            // exception not to add
-            if(contents["DESCRIPTION"] == "Resolution" || contents["DESCRIPTION"] == "Assign To Selected Surfaces" || contents["DESCRIPTION"] == "Assign To All Surfaces" || contents["DESCRIPTION"] == "Restart" || contents["DESCRIPTION"] == "Select" || contents["DESCRIPTION"] == "mappingImage"){
-                continue; // skip this one
+            if(!page.isEmpty()){
+                pages.push_back(page);
             }
-            
-            if(contents["TYPE"] == "f"){
-                page.addParameter(createParameter(contents));
-            }
-        }
-        if(!page.isEmpty()){
-            pages.insert(std::make_pair(keyword,page));
         }
     }
 }
@@ -167,9 +158,13 @@ void ofxMadOscQuery::oscReceiveMessages(){
     while(oscReceiver.hasWaitingMessages()){
         ofxOscMessage m;
         oscReceiver.getNextMessage(m);
-        
+        ofLog() << "Received Messafe " << lastSelectedMedia << endl;
+
         if(m.getAddress() == "/medias/select_by_name"){
             lastSelectedMedia = m.getArgAsString(0);
+            ofLog() << "Connected Media " << lastSelectedMedia << endl;
+
+            ofNotifyEvent(mediaNameE, lastSelectedMedia, this);
         }
     }
 }
