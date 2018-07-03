@@ -117,6 +117,8 @@ public:
     bool isGroup(){return bIsGroup;}
     bool setIsGroup(bool isGroup){bIsGroup = isGroup;}
 
+    std::list<MadParameterPage>::iterator parentPage;
+
 private:
     bool bSubpage;
     bool bIsGroup;

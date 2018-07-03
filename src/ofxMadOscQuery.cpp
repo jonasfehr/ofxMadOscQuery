@@ -216,7 +216,7 @@ bool ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> &pages, MadPa
             setupPageFromJson(pages, subPage, midiDevice, contents["CONTENTS"], keyType);
             
             // create opacity subpage for all surfaces/fixtures in the group
-                string searchString = "/surfaces/"+groupName+"/*/opacity";
+                string searchString = groupName+"/*/opacity";
             
                 
             auto customJson = ofJson::parse("{ \"pages\": [{\"name\": \""+groupName+"_SubPage\", \"surfaces\": [\""+searchString+"\"]}]}");
