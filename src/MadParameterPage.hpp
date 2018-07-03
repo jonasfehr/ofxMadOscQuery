@@ -40,6 +40,10 @@ public:
 		range = std::make_pair(lower, upper);
 	}
 	
+	std::string getLatestParameterName(){
+		return "sdfdf";
+	}
+	
 	bool isEmpty(){
 		return parameters.size() == 0;
 	}
@@ -103,8 +107,6 @@ public:
 			if(upper > 8)upper = 8;
 			range = std::make_pair(lower, upper);
 		}
-		
-		
 		return range;
 	}
 	
