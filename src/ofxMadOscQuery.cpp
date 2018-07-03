@@ -42,8 +42,7 @@ void ofxMadOscQuery::setupMadParameterFromJson(MadParameter & newParameter, ofJs
 }
 
 //--------------------------------------------------------------
-void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName){
-	ofJson json = ofLoadJson(fileName);
+void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json){
 	for(auto& page : json["pages"]){
 		std::string name = page["name"];
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
@@ -220,9 +219,10 @@ bool ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> &pages, MadPa
                 string searchString = "/surfaces/"+groupName+"/*/opacity";
             
                 
-                ofJson customJson = "{ \"pages\": [{\"name\": \""+groupName+"_SubPage\", \"surfaces\": ["+searchString+"]}]}";
-                
-                //createCustomPage(pages, midiDevice, customJson);
+            auto customJson = ofJson::parse("{ \"pages\": [{\"name\": \""+groupName+"_SubPage\", \"surfaces\": [\""+searchString+"\"]}]}");
+            
+            cout << customJson << endl;
+                createCustomPage(pages, midiDevice, customJson);
             
             
                 // create pages for elements in group

@@ -51,7 +51,7 @@ public:
     void createSubPages(std::list<MadParameterPage> &page, ofxMidiDevice* midiDevice, ofJson json);
     bool setupPageFromJson(std::list<MadParameterPage> &pages, MadParameterPage & page, ofxMidiDevice* midiDevice, ofJson json, string keyType);
 
-	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName);
+	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
     std::string getStatusString();
 	bool matchesGroupWildcard(std::string paramName, std::string elementName);
 	
