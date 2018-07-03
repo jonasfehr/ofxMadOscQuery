@@ -49,6 +49,8 @@ public:
     void setupMadParameterFromJson(MadParameter & newParameter, ofJson jsonParameterValues);
 
     void createSubPages(std::list<MadParameterPage> &page, ofxMidiDevice* midiDevice, ofJson json);
+    bool setupPageFromJson(std::list<MadParameterPage> &pages, MadParameterPage & page, ofxMidiDevice* midiDevice, ofJson json, string keyType);
+
 	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, std::string fileName);
     std::string getStatusString();
 	

@@ -9,11 +9,12 @@
 
 class MadParameterPage{
 public:
-    MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false){
+    MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false, bool isGroup = false){
 		this->name = name;
 		this->midiDevice = midiDevice;
 		ofLog() << "Constructor for " << this->name << " called!" << endl;
         bSubpage = isSubpage;
+        bIsGroup = isGroup;
 
 	};
 	
@@ -110,9 +111,12 @@ public:
 	}
     
     bool isSubpage(){return bSubpage;}
-	
+    bool isGroup(){return bIsGroup;}
+    bool setIsGroup(bool isGroup){bIsGroup = isGroup;}
+
 private:
     bool bSubpage;
+    bool bIsGroup;
 	std::list<MadParameter*> parameters;
 	std::string name = "";
 	std::pair<int, int> range;
