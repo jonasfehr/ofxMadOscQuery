@@ -27,6 +27,8 @@ public:
         bSelectable = false;
         if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
         bIsGroup = false;
+		
+		checkIfOpacityParameter(this->getOscAddress());
     };
     
     MadParameter(ofJson parameterValues, string name){
@@ -83,7 +85,6 @@ public:
     void setIsGroup(bool isGroup){bIsGroup = isGroup;}
     bool bIsGroup;
 
-    	
 	// Send OSC when parameter changed
 	void onParameterChange(float & p){
 		this-set(p);
@@ -91,6 +92,22 @@ public:
         m.setAddress(oscAddress);
         m.addFloatArg(getParameterValue());
         ofNotifyEvent(oscSendEvent,m,this);
+	}
+	
+	void checkIfOpacityParameter(std::string oscAddress){
+		// checks whether this parameter controls opacity
+		oscAddress = oscAddress.substr(1, ofToString(oscAddress).size()); // remove start and end
+		std::stringstream ss(oscAddress);
+		std::string segment;
+		std::vector<std::string> segList;
+		while(std::getline(ss, segment, '/')){
+			segList.push_back(segment);
+		}
+		segList.pop_back();
+
+		if((*segList.end()) == "opacity"){
+			this->isOpacityParameter = true;
+		}
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){
@@ -101,6 +118,8 @@ public:
 	void unlinkMidiComponent(MidiComponent &midiComponent){
 		midiComponent.value.removeListener(this, &MadParameter::onParameterChange);
 	}
+	
+	bool isOpacityParameter = false;
 	
 };
 
