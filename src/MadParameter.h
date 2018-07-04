@@ -89,6 +89,24 @@ public:
 	void onParameterChange(float & p){
 		this-set(p);
         ofxOscMessage m;
+
+		if(this->isOpacityParameter){
+			// TODO: Send visible
+			auto newAddress = this->oscAddress;
+			auto start_position_to_erase = newAddress.find("opacity");
+			newAddress.erase(start_position_to_erase, ofToString("opacity").size());
+			newAddress += "visible";
+			
+			std::cout << newAddress << endl;
+			m.clear();
+			m.setAddress(oscAddress);
+			if(p>0) m.addBoolArg(true);
+			else    m.addBoolArg(false);
+
+			ofNotifyEvent(oscSendEvent,m,this);
+			
+		}
+		m.clear();
         m.setAddress(oscAddress);
         m.addFloatArg(getParameterValue());
         ofNotifyEvent(oscSendEvent,m,this);
