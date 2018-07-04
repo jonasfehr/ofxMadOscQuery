@@ -97,14 +97,11 @@ public:
 			newAddress.erase(start_position_to_erase, ofToString("opacity").size());
 			newAddress += "visible";
 			
-			std::cout << newAddress << endl;
-			m.clear();
-			m.setAddress(oscAddress);
-			if(p>0) m.addBoolArg(true);
-			else    m.addBoolArg(false);
-
+            m.clear();
+            m.setAddress(newAddress);
+            if(p>0) m.addIntArg(1);
+            else    m.addIntArg(0);
 			ofNotifyEvent(oscSendEvent,m,this);
-			
 		}
 		m.clear();
         m.setAddress(oscAddress);
