@@ -85,10 +85,16 @@ public:
 			parameter++;
 		}
 		
-		for(int i = 1; i < 9 && (parameter != parameters.end()); i++){
-			(*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
-			parameter++;
+		for(int i = 1; i < 9; i++){
+            if(parameter != parameters.end()){
+                (*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+                parameter++;
+            }else{
+                midiDevice->midiComponents["fader_" + ofToString(i)].value.set(0);
+            }
+
 		}
+        
 	}
 	
 	void unlinkDevice(){
