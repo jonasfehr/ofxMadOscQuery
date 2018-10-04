@@ -34,7 +34,7 @@ public:
 
     string ip;
     
-    string lastSelectedMedia;
+//    string lastSelectedMedia;
 //    string lastSelectedSurface;
 
     int sendPort, receivePort;
@@ -46,19 +46,33 @@ public:
     void oscReceiveMessages();
 
     ofJson receive();
-    void setupMadParameterFromJson(MadParameter & newParameter, ofJson jsonParameterValues);
+//    void createParameterMap(ofJson json);
+//    void getParameterList(ofJson json, vector<string> skipKeys);
+    map<string,ofJson>  getContentMap(ofJson json, string key, vector<string> skipKeys);
+//    void iterateContents(ofJson json);
+    void iterateFind(ofJson json, string key, MadParameterPage* customPage, ofJson jsonSkipKeys);
+    void iterateFind(ofJson &jsonReturn, ofJson json, string key, ofJson jsonSkipKeys);
 
     void createSubPages(std::list<MadParameterPage> &page, ofxMidiDevice* midiDevice, ofJson json);
     bool setupPageFromJson(std::list<MadParameterPage> &pages, MadParameterPage & page, ofxMidiDevice* midiDevice, ofJson json, string keyType);
 
 	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice* midiDevice, ofJson json);
+    void createCustomPages(ofxMidiDevice* midiDevice, ofJson jsonPages, ofJson madMapperJson);
     std::string getStatusString();
 	bool matchesGroupWildcard(std::string paramName, std::string elementName);
+    void getConnectedMediaName(string * mediaName, ofJson json, string key, ofJson jsonSkipKeys);
 	
 	MadParameter* createParameter(ofJson parameterValues);
 	MadParameter* createParameter(ofJson parameterValues, std::string name);
 	void addParameterToCustomPage(ofJson element, std::string type, MadParameterPage* customPage);
 	std::map<std::string, MadParameter> parameterMap;
     
+    void updateValues();
+    
     ofEvent<string> mediaNameE;
+    
+    std::list<MadParameterPage> pages;
+    std::list<MadParameterPage> subPages;
+    std::list<MadParameterPage> mediaPages;
+    ofJson madMapperJson;
 };

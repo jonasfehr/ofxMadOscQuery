@@ -31,20 +31,20 @@ public:
 		checkIfOpacityParameter(this->getOscAddress());
     };
     
-    MadParameter(ofJson parameterValues, string name){
-        this->setOscAddress(parameterValues["FULL_PATH"].get<std::string>());
-        this->setName(name);
-        if(!parameterValues["RANGE"].is_null() ){
-            range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
-            range.max = parameterValues["RANGE"].at(0)["MAX"].get<float>();
-        }
-        float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
-        this->set(valueNormalized);
-        
-        bSelectable = false;
-        if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
-        bIsGroup = false;
-    };
+//    MadParameter(ofJson parameterValues, string name){
+//        this->setOscAddress(parameterValues["FULL_PATH"].get<std::string>());
+//        this->setName(name);
+//        if(!parameterValues["RANGE"].is_null() ){
+//            range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
+//            range.max = parameterValues["RANGE"].at(0)["MAX"].get<float>();
+//        }
+//        float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
+//        this->set(valueNormalized);
+//        
+//        bSelectable = false;
+//        if(parameterValues["DESCRIPTION"] == "Opacity") bSelectable = true;
+//        bIsGroup = false;
+//    };
 
 	MadParameter(){};
     ~MadParameter(){};
@@ -122,7 +122,11 @@ public:
 
 		if((*segList.end()) == "opacity"){
 			this->isOpacityParameter = true;
+            
+            isMaster = true;
+            parentName = segList[segList.size()-1];
 		}
+        
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){
@@ -135,6 +139,14 @@ public:
 	}
 	
 	bool isOpacityParameter = false;
+    
+    bool isMaster = false;
+    string connectedMedia;
+    void setConnectedMediaName( string name ){ this->connectedMedia = name; };
+    string getConnectedMediaName(){ return this->connectedMedia; };
+
+    string parentName;
+    
 	
 };
 

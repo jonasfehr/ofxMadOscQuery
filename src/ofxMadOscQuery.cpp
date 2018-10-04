@@ -14,6 +14,8 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
 	this->receiveAddress = "http://"+ip+":"+ofToString(8010);
 	oscSender.setup(ip, sendPort);
 	oscReceiver.setup(receivePort);
+    
+    this->madMapperJson = receive(); //ofLoadJson("rawExample.json"); //
 }
 
 //--------------------------------------------------------------
@@ -30,15 +32,392 @@ ofJson ofxMadOscQuery::receive(){
     return response;
 }
 
+
+void ofxMadOscQuery::updateValues(){
+//    long time = ofGetElapsedTimeMillis();
+    
+    this->madMapperJson = receive();
+//    cout << "receive "<< ofGetElapsedTimeMillis() - time << endl;
+    for( auto & param:parameterMap){
+//        long timeEach = ofGetElapsedTimeMillis();
+        string path = param.second.getOscAddress();
+        vector<string> pathSeg = ofSplitString(path, "/");
+        ofJson json = madMapperJson;
+        for(int i = 1; i<pathSeg.size(); i++){
+            json = json["CONTENTS"][pathSeg[i]];
+        }
+        param.second.set(json["VALUE"].at(0));
+//        cout << param.second.getName() << " " << ofGetElapsedTimeMillis() - timeEach << endl;
+    }
+//    cout << "end "<< ofGetElapsedTimeMillis() - time << endl;
+}
 //--------------------------------------------------------------
-void ofxMadOscQuery::setupMadParameterFromJson(MadParameter & newParameter, ofJson jsonParameterValues){
-	newParameter.setOscAddress(jsonParameterValues["FULL_PATH"].get<std::string>());
-	newParameter.setName(jsonParameterValues["DESCRIPTION"]);
-	if(! jsonParameterValues["RANGE"].is_null() ){
-		newParameter.setMin(jsonParameterValues["RANGE"].at(0)["MIN"]);
-		newParameter.setMax(jsonParameterValues["RANGE"].at(0)["MAX"]);
-	}
-	newParameter.set( jsonParameterValues["VALUE"].at(0));
+//void ofxMadOscQuery::createParameterMap(ofJson json){
+//    
+//    
+// 
+////    getParameterList(json["CONTENTS"]["surfaces"]["CONTENTS"], {"selected"});
+//
+////    getParameterList(json["CONTENTS"]["medias"]["CONTENTS"], {"next", "per_type_selection", "previous", "select", "select_by_name", "selected"});
+//    
+//    iterateContents(json["CONTENTS"]["surfaces"]);
+//    cout << parameterMap.size() << endl;
+//    
+//}
+
+//void ofxMadOscQuery::iterateContents(ofJson json){
+//    if(json["TYPE"]=="f") createParameter(json);
+//    // dig deeper
+//    for (nlohmann::json::iterator it = json.begin(); it != json.end(); ++it) {
+//        if(it.key() == "CONTENTS"){
+//            for (nlohmann::json::iterator it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
+//                cout << it2.key() << endl;
+//                iterateContents(it2.value());
+//            }
+//            cout << "________________________" << endl;
+//        }
+//    }
+//}
+
+
+void ofxMadOscQuery::iterateFind(ofJson &jsonReturn, ofJson json, string key, ofJson jsonSkipKeys){
+    
+    if(json["FULL_PATH"].is_null()) return;
+    string path = json["FULL_PATH"];
+    vector<string> pathSeg = ofSplitString(path, "/");
+    vector<string> keySeg = ofSplitString(key, "/");
+    
+    bool isKeyCompatible = true;
+    for(int i = 0; i < keySeg.size() || i < pathSeg.size(); i++){
+        if(keySeg[i] == pathSeg[i]){
+        }else if( keySeg[i] == "*"){
+            for(auto & skipKey : jsonSkipKeys){
+                if(pathSeg[i] == skipKey.get<std::string>()){
+                    isKeyCompatible = false;
+                }
+            }
+        } else {
+            isKeyCompatible = false;
+        }
+        
+    }
+    
+    if(json["TYPE"] =="f" && isKeyCompatible){
+        jsonReturn = json;
+    }
+    else{
+        // dig deeper
+        for (nlohmann::json::iterator it = json.begin(); it != json.end(); ++it) {
+            if(it.key() == "CONTENTS"){
+                for (nlohmann::json::iterator it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
+                    //                cout << it2.key() << endl;
+                     iterateFind(jsonReturn, it2.value(), key, jsonSkipKeys);
+                }
+                //            cout << "________________________" << endl;
+            }
+        }
+    }
+}
+
+void ofxMadOscQuery::iterateFind(ofJson json, string key, MadParameterPage* customPage, ofJson jsonSkipKeys){
+    if(json["FULL_PATH"].is_null()) return;
+    string path = json["FULL_PATH"];
+//    if(path == "/medias/shpereMap_7.fs/audio_level" && key == "/medias/shpereMap_7.fs/*"){
+//        cout << "x" << endl;
+//    }
+    vector<string> pathSeg = ofSplitString(path, "/");
+    vector<string> keySeg = ofSplitString(key, "/");
+
+    bool isKeyCompatible = true;
+    int j = 0;
+    int i = 0;
+    while(j < keySeg.size() && i < pathSeg.size()){
+        if(keySeg[j] == pathSeg[i]){
+            j++;
+            i++;
+        }else if( keySeg[j] == "*"){
+            for(auto & skipKey : jsonSkipKeys){
+                for(int n = j; n <= i; n++){
+                    //                    if(pathSeg[n] == "audio_level"){
+                    //                        cout << pathSeg[n] << endl;
+                    //                    }
+                    if(pathSeg[n] == skipKey.get<std::string>()){
+                        isKeyCompatible = false;
+                    }
+                }
+            }
+
+            if(keySeg.size()-1 != j){ // make sure there is more to come
+                std::size_t foundPos = path.find("/"+keySeg[j+1]);
+                if (foundPos!=std::string::npos){
+                    int endPos = foundPos+keySeg[j+1].size()+1;
+                    if(path[endPos] == '/' || endPos == path.size()){  // check if at the end or has a "/" to follow
+                        while(pathSeg[i] != keySeg[j+1]){
+                            i++;
+                        }
+                    } else {
+                        isKeyCompatible = false;
+                    }
+                }
+            } else {
+                if( pathSeg.size() == keySeg.size() && isKeyCompatible) {
+                    j = keySeg.size();
+                }
+            }
+            j++;
+        } else {
+            isKeyCompatible = false;
+            j++;
+            i++;
+        }
+
+    }
+    if(json["TYPE"]=="f" && isKeyCompatible){
+        (*customPage).addParameter(createParameter(json));
+    }
+
+
+//    if(keySeg.back()=="opacity" && isKeyCompatible){
+//        ofJson jsonSubpages = ofLoadJson("subpages.json");
+//        std::string name = pathSeg[pathSeg.size()-2];
+//        MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
+//        // Find matching surfaces
+//        for(auto& element : jsonSubpages["opacity"]["elements"]){
+//            string newKey = key;
+//            ofStringReplace(newKey, "*", name);
+//            ofStringReplace(newKey, "/opacity", element);
+//            cout << newKey << endl;
+//            cout << customSubpage.getParameters()->size() << endl;
+//            iterateFind(json["CONTENTS"], newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"], midiDevice, subPages);
+//        }
+//        subPages.push_back(customSubpage);
+//    }
+
+
+
+    // dig deeper
+    for (nlohmann::json::iterator it = json.begin(); it != json.end(); ++it) {
+        if(it.key() == "CONTENTS"){
+            for (nlohmann::json::iterator it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
+//                cout << it2.key() << endl;
+                iterateFind(it2.value(), key, customPage, jsonSkipKeys);
+            }
+//            cout << "________________________" << endl;
+        }
+    }
+}
+
+
+//void ofxMadOscQuery::getParameterList(ofJson json, vector<string> skipKeys){
+//
+//    for (nlohmann::json::iterator it = json.begin(); it != json.end(); ++it) {
+//        bool doSkip = false;
+//        for(auto & skipKey : skipKeys){
+//            if(it.key() == skipKey) doSkip = true;
+//        }
+//        if(!doSkip){
+//            cout << it.key() << endl;
+//        }
+//    }
+//}
+
+map<string,ofJson> ofxMadOscQuery::getContentMap(ofJson json, string key, vector<string> skipKeys){
+    
+    map<string,ofJson> contentMap;
+    vector<string> keySeg = ofSplitString(key, "/");
+    
+    
+//    for(int level = 0; level < keySeg.size(); levle++)
+    auto container = json["CONTENTS"][keySeg[1]]["CONTENTS"];
+    for (nlohmann::json::iterator it = container.begin(); it != container.end(); ++it) {
+
+        bool isKeyCompatible = true;
+        if( keySeg[2] == "*"){
+            for(auto & skipKey : skipKeys){
+                if(it.key() == skipKey){
+                    isKeyCompatible = false;
+                }
+            }
+        } else {
+            isKeyCompatible = false;
+        }
+    
+        if(isKeyCompatible){
+            contentMap[it.key()] = it.value();
+        }
+        
+
+        // std::size_t found = path.find(keyWord);
+        //if (found!=std::string::npos)
+        
+    }
+    
+    return contentMap;
+}
+
+void ofxMadOscQuery::getConnectedMediaName(string * mediaName, ofJson json, string key, ofJson jsonSkipKeys){
+    
+    if(json["FULL_PATH"].is_null()) return;
+    string path = json["FULL_PATH"];
+    vector<string> pathSeg = ofSplitString(path, "/");
+    vector<string> keySeg = ofSplitString(key, "/");
+    
+    bool isKeyCompatible = true;
+    int j = 0;
+    int i = 0;
+    while(j < keySeg.size() && i < pathSeg.size()){
+        if(keySeg[j] == pathSeg[i]){
+            j++;
+            i++;
+        }else if( keySeg[j] == "*"){
+            
+            if(keySeg.size()-1 != j){ // make sure there is more to come
+                std::size_t foundPos = path.find("/"+keySeg[j+1]);
+                if (foundPos!=std::string::npos){
+                    int endPos = foundPos+keySeg[j+1].size()+1;
+                    if(path[endPos] == '/' || endPos == path.size()){  // check if at the end or has a "/" to follow
+                        while(pathSeg[i] != keySeg[j+1]){
+                            i++;
+                        }
+                    } else {
+                        isKeyCompatible = false;
+                    }
+                }
+            } else {
+                if( pathSeg.size() == keySeg.size() && isKeyCompatible) {
+                    j = keySeg.size();
+                }
+            }
+            
+            for(auto & skipKey : jsonSkipKeys){
+                for(int n = j; n < i; n++){
+                    if(pathSeg[n] == skipKey.get<std::string>()){
+                        isKeyCompatible = false;
+                    }
+                }
+            }
+            j++;
+        } else {
+            isKeyCompatible = false;
+            j++;
+            i++;
+        }
+        
+    }
+    if(json["TYPE"]=="s" && isKeyCompatible){
+        *mediaName = json["VALUE"][0].get<std::string>();
+        ofStringReplace(*mediaName, " ", "_");
+//        cout << mediaName << endl;
+    }
+    
+    
+    // dig deeper
+    for (nlohmann::json::iterator it = json.begin(); it != json.end(); ++it) {
+        if(it.key() == "CONTENTS"){
+            for (nlohmann::json::iterator it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
+                //                cout << it2.key() << endl;
+                 getConnectedMediaName(mediaName, it2.value(), key, jsonSkipKeys);
+            }
+            //            cout << "________________________" << endl;
+        }
+    }
+}
+
+
+//--------------------------------------------------------------
+void ofxMadOscQuery::createCustomPages(ofxMidiDevice* midiDevice, ofJson jsonPages, ofJson madMapperJson){
+    for(auto& page : jsonPages["pages"]){
+        std::string name = page["name"];
+        MadParameterPage customPage = MadParameterPage(name, midiDevice);
+        
+        // Find matching surfaces
+        for(auto& element : page["elements"]){
+            iterateFind(madMapperJson, element, &customPage, page["skipKeys"]);
+//            ofJson jsonParam;
+//            iterateFind(jsonParam, madMapperJson, element, page["skipKeys"]);
+//            if(!jsonParam.is_null()) customPage.addParameter(createParameter(jsonParam));
+
+        }
+
+        pages.push_back(customPage);
+    }
+    
+    // create the necessary subpages
+    ofJson jsonSubpages = ofLoadJson("subpages.json");
+
+    for( auto& param : parameterMap){
+        if(param.second.isMaster){
+            std::string name = param.second.parentName;
+            
+            // Opacity Pages
+            MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
+//            // Find matching surfaces
+            for(auto& element : jsonSubpages["opacity"]["elements"]){
+                string newKey = "*/"+name+element.get<std::string>();
+//                ofStringReplace(newKey, "*", name);
+//                ofStringReplace(newKey, "/opacity", element);
+//                cout << newKey << endl;
+//                cout << customSubpage.getParameters()->size() << endl;
+                iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"]);
+            }
+            subPages.push_back(customSubpage);
+            
+            // connected Media
+            string newKey = "*/"+name+"/visual/name";
+            string mediaName;
+            getConnectedMediaName(&mediaName, madMapperJson, newKey,  jsonSubpages["medias"]["skipKeys"] );
+        
+            if(mediaName.size()>0) {
+                if(mediaName != "4x4.png"){
+                    MadParameterPage customMediaSubpage = MadParameterPage(mediaName, midiDevice, true);
+                    param.second.setConnectedMediaName( mediaName );
+
+                    for(auto& element : jsonSubpages["medias"]["elements"]){
+                        string mediaKey = "/medias/"+mediaName+element.get<std::string>();
+                        iterateFind(madMapperJson, mediaKey, &customMediaSubpage, jsonSubpages["medias"]["skipKeys"]);
+                    }
+                    subPages.push_back(customMediaSubpage);
+                }
+            }
+        }
+    }
+    
+    for( auto& param : parameterMap){
+        if(param.second.isMaster){
+            std::string name = param.second.parentName;
+            MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
+            //            // Find matching surfaces
+            for(auto& element : jsonSubpages["media"]["elements"]){
+                string newKey = "*/"+name+element.get<std::string>();
+                //                ofStringReplace(newKey, "*", name);
+                //                ofStringReplace(newKey, "/opacity", element);
+                //                cout << newKey << endl;
+                //                cout << customSubpage.getParameters()->size() << endl;
+                iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"]);
+            }
+            subPages.push_back(customSubpage);
+        }
+    }
+
+    
+    
+    
+//    for(auto& subpage : jsonPages["subpages"]){
+//        map<string,ofJson> contentMap = getContentMap(madMapperJson, subpage["key"], subpage["skipKeys"]);
+//        for(auto & content : contentMap){
+//            std::string name = content.first;
+//            MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
+//            // Find matching surfaces
+//            for(auto& element : subpage["elements"]){
+//
+//                iterateFind(content.second, element, &customSubpage, subpage["skipKeys"]);
+//            }
+//            subPages.push_back(customSubpage);
+//        }
+//    }
+
+
+    
 }
 
 //--------------------------------------------------------------
@@ -47,18 +426,18 @@ void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMid
 		std::string name = page["name"];
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
 		
-		// Find matching surfaces
-		for(auto& element : page["surfaces"]){
-			addParameterToCustomPage(element, "surfaces", &customPage);
-		}
-		// Find matching fixtures
-		for(auto& element : page["fixtures"]){
-			addParameterToCustomPage(element, "fixtures", &customPage);
-		}
-		// Find matching medias
-		for(auto& element : page["medias"]){
-			addParameterToCustomPage(element, "medias", &customPage);
-		}
+            // Find matching surfaces
+            for(auto& element : page["surfaces"]){
+                addParameterToCustomPage(element, "surfaces", &customPage);
+            }
+            // Find matching fixtures
+            for(auto& element : page["fixtures"]){
+                addParameterToCustomPage(element, "fixtures", &customPage);
+            }
+            // Find matching medias
+            for(auto& element : page["medias"]){
+                addParameterToCustomPage(element, "medias", &customPage);
+            }
 		pages.push_front(customPage);
 	}
 }
@@ -66,7 +445,7 @@ void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> &pages, ofxMid
 void ofxMadOscQuery::addParameterToCustomPage(ofJson element, std::string type, MadParameterPage* customPage){
 	std::string elementName = ofToString(element).substr(1, ofToString(element).size() - 2);
 	std::string typeName = "/" + type +"/";
-	
+
 	for(auto& surfaceParam : parameterMap){
 		std::string paramName = ofToString(surfaceParam.first);
 		if(elementName == "*"){
@@ -273,18 +652,18 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 }
 
 void ofxMadOscQuery::oscReceiveMessages(){
-    while(oscReceiver.hasWaitingMessages()){
-        ofxOscMessage m;
-        oscReceiver.getNextMessage(m);
-        ofLog() << "Received Messafe " << lastSelectedMedia << endl;
-        
-        if(m.getAddress() == "/medias/select_by_name"){
-            lastSelectedMedia = m.getArgAsString(0);
-            ofLog() << "Connected Media " << lastSelectedMedia << endl;
-            
-            ofNotifyEvent(mediaNameE, lastSelectedMedia, this);
-        }
-    }
+//    while(oscReceiver.hasWaitingMessages()){
+//        ofxOscMessage m;
+//        oscReceiver.getNextMessage(m);
+//        ofLog() << "Received Messafe " << lastSelectedMedia << endl;
+//
+//        if(m.getAddress() == "/medias/select_by_name"){
+//            lastSelectedMedia = m.getArgAsString(0);
+//            ofLog() << "Connected Media " << lastSelectedMedia << endl;
+//
+//            ofNotifyEvent(mediaNameE, lastSelectedMedia, this);
+//        }
+//    }
 }
 
 //--------------------------------------------------------------
@@ -295,13 +674,13 @@ MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues){
 	ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
 	return val;
 }
-//--------------------------------------------------------------
-MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues, std::string name){
-	std::string key = parameterValues["FULL_PATH"];
-	parameterMap[key] = MadParameter(parameterValues,name);
-	auto val = &parameterMap.operator[](key);
-	ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-	return val;
-}
+////--------------------------------------------------------------
+//MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues, std::string name){
+//    std::string key = parameterValues["FULL_PATH"];
+//    parameterMap[key] = MadParameter(parameterValues,name);
+//    auto val = &parameterMap.operator[](key);
+//    ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
+//    return val;
+//}
 
 
