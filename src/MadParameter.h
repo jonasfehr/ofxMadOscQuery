@@ -152,7 +152,7 @@ public:
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){
-//        midiComponent.value = this->get();
+        midiComponent.value = this->get();
 		midiComponent.value.addListener(this, &MadParameter::onParameterChange);
 	}
 	

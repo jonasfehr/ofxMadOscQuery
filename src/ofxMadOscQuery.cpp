@@ -655,7 +655,6 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 
 void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup &syncGroup){
     while(oscReceiver.hasWaitingMessages()){
-
         oscReceiver.getParameter(syncGroup);
     }
 //
