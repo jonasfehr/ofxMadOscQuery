@@ -43,7 +43,7 @@ public:
     
     void oscSendToMadMapper(ofxOscMessage &m);
     
-    void oscReceiveMessages();
+    void oscReceiveMessages(ofParameterGroup &syncGroup);
 
     ofJson receive();
 //    void createParameterMap(ofJson json);

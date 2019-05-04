@@ -15,7 +15,7 @@ void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort){
 	oscSender.setup(ip, sendPort);
 	oscReceiver.setup(receivePort);
     
-    this->madMapperJson = receive(); //ofLoadJson("rawExample.json"); //
+//    this->madMapperJson = receive(); // ofLoadJson("rawExample.json"); //
 }
 
 //--------------------------------------------------------------
@@ -29,6 +29,7 @@ ofJson ofxMadOscQuery::receive(){
     std::stringstream ssJSON;
     ssJSON << resp.data;
     ssJSON >> response;
+    this->madMapperJson = response;
     return response;
 }
 
@@ -138,16 +139,15 @@ void ofxMadOscQuery::iterateFind(ofJson json, string key, MadParameterPage* cust
         }else if( keySeg[j] == "*"){
             for(auto & skipKey : jsonSkipKeys){
                 for(int n = j; n <= i; n++){
-                    //                    if(pathSeg[n] == "audio_level"){
-                    //                        cout << pathSeg[n] << endl;
-                    //                    }
                     if(pathSeg[n] == skipKey.get<std::string>()){
                         isKeyCompatible = false;
                     }
                 }
             }
-
+            
             if(keySeg.size()-1 != j){ // make sure there is more to come
+//                vector<string> splitPath = ofSplitString(path, keySeg[j-1]);
+//                string leftoverPath = splitPath[1];
                 std::size_t foundPos = path.find("/"+keySeg[j+1]);
                 if (foundPos!=std::string::npos){
                     int endPos = foundPos+keySeg[j+1].size()+1;
@@ -155,6 +155,7 @@ void ofxMadOscQuery::iterateFind(ofJson json, string key, MadParameterPage* cust
                         while(pathSeg[i] != keySeg[j+1]){
                             i++;
                         }
+                        if(i == j) isKeyCompatible = false; // if the key is at the spot of the * the pass...
                     } else {
                         isKeyCompatible = false;
                     }
@@ -167,8 +168,9 @@ void ofxMadOscQuery::iterateFind(ofJson json, string key, MadParameterPage* cust
             j++;
         } else {
             isKeyCompatible = false;
-            j++;
-            i++;
+            break;
+//            j++;
+//            i++;
         }
 
     }
@@ -651,11 +653,16 @@ void ofxMadOscQuery::oscSendToMadMapper(ofxOscMessage &m){
 	oscSender.sendMessage(m, false);
 }
 
-void ofxMadOscQuery::oscReceiveMessages(){
+void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup &syncGroup){
+    while(oscReceiver.hasWaitingMessages()){
+
+        oscReceiver.getParameter(syncGroup);
+    }
+//
 //    while(oscReceiver.hasWaitingMessages()){
 //        ofxOscMessage m;
 //        oscReceiver.getNextMessage(m);
-//        ofLog() << "Received Messafe " << lastSelectedMedia << endl;
+//        ofLog() << "Received message on adress: " << m.getAddress() << endl;
 //
 //        if(m.getAddress() == "/medias/select_by_name"){
 //            lastSelectedMedia = m.getArgAsString(0);
@@ -668,6 +675,8 @@ void ofxMadOscQuery::oscReceiveMessages(){
 
 //--------------------------------------------------------------
 MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues){
+    cout << parameterValues << endl;
+    cout << endl;
 	std::string key = parameterValues["FULL_PATH"];
 	parameterMap[key] = MadParameter(parameterValues);
 	auto val = &parameterMap.operator[](key);

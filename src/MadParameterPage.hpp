@@ -10,6 +10,8 @@
 class MadParameterPage{
 public:
 
+    ofParameterGroup linkedParamGroup;
+
     MadParameterPage(std::string name, ofxMidiDevice* midiDevice, bool isSubpage = false, bool isGroup = false){
 		this->name = name;
 		this->midiDevice = midiDevice;
@@ -18,6 +20,27 @@ public:
         bIsGroup = isGroup;
 
 	};
+    
+    ~MadParameterPage(){
+    };
+    
+    void setValuesOnDevice(ofAbstractParameter &p){
+        auto parameter = parameters.begin();
+        for(int i = 1; i < range.first; i++){
+            parameter++;
+        }
+
+        for(int i = 1; i < 9; i++){
+            if(parameter != parameters.end()){
+                if((*parameter)->updateFromMidi) return;
+                    midiDevice->midiComponents["fader_" + ofToString(i)].value.set((*parameter)->get());
+
+                parameter++;
+            }else{
+                midiDevice->midiComponents["fader_" + ofToString(i)].value.set(0);
+            }
+        }
+    }
 	
 	void addParameter(MadParameter* parameter){
 		std::string paramName = parameter->getParameterName();
@@ -85,9 +108,11 @@ public:
 			parameter++;
 		}
 		
+        linkedParamGroup.clear();
 		for(int i = 1; i < 9; i++){
             if(parameter != parameters.end()){
                 (*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+                linkedParamGroup.add(*(*parameter));
                 parameter++;
             }else{
                 midiDevice->midiComponents["fader_" + ofToString(i)].value.set(0);
@@ -95,6 +120,8 @@ public:
 
 		}
         
+        ofAddListener(linkedParamGroup.parameterChangedE(),this,&MadParameterPage::setValuesOnDevice);
+
 	}
 	
 	void unlinkDevice(){
@@ -107,6 +134,9 @@ public:
 			(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			prevParameter++;
 		}
+        
+ofRemoveListener(linkedParamGroup.parameterChangedE(),this,&MadParameterPage::setValuesOnDevice);
+
 	}
 	
 	std::pair<int,int> getRange(){
