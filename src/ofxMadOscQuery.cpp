@@ -47,7 +47,9 @@ void ofxMadOscQuery::updateValues(){
         for(int i = 1; i<pathSeg.size(); i++){
             json = json["CONTENTS"][pathSeg[i]];
         }
-        param.second.set(json["VALUE"].at(0));
+        if(!json.is_null()){
+            param.second.set(json["VALUE"].at(0));
+        }
 //        cout << param.second.getName() << " " << ofGetElapsedTimeMillis() - timeEach << endl;
     }
 //    cout << "end "<< ofGetElapsedTimeMillis() - time << endl;
