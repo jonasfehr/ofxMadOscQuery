@@ -103,7 +103,7 @@ public:
 //    // Send OSC when parameter changed
     void onParameterChange(float & p){
         updateFromMidi = true;
-        this-set(p);
+        this->set(p);
         
         if(doSendOsc){
             ofxOscMessage m;
@@ -113,6 +113,32 @@ public:
                 auto newAddress = this->oscAddress;
                 auto start_position_to_erase = newAddress.find("opacity");
                 newAddress.erase(start_position_to_erase, ofToString("opacity").size());
+                newAddress += "visible";
+                
+                m.clear();
+                m.setAddress(newAddress);
+                if(p>0) m.addIntArg(1);
+                else    m.addIntArg(0);
+                ofNotifyEvent(oscSendEvent,m,this);
+            }
+            if(this->isFixtureParameter){
+                // TODO: Send visible
+                auto newAddress = this->oscAddress;
+                auto start_position_to_erase = newAddress.find("luminosity");
+                newAddress.erase(start_position_to_erase, ofToString("luminosity").size());
+                newAddress += "visible";
+                
+                m.clear();
+                m.setAddress(newAddress);
+                if(p>0) m.addIntArg(1);
+                else    m.addIntArg(0);
+                ofNotifyEvent(oscSendEvent,m,this);
+            }
+            if(this->isModuleParameter){
+                // TODO: Send visible
+                auto newAddress = this->oscAddress;
+                auto start_position_to_erase = newAddress.find("luminosity");
+                newAddress.erase(start_position_to_erase, ofToString("luminosity").size());
                 newAddress += "visible";
                 
                 m.clear();
@@ -149,6 +175,20 @@ public:
             parentName = segList[segList.size()-1];
 		}
         
+        if((*segList.end()) == "luminosity"){
+            this->isFixtureParameter = true;
+            
+            isMaster = true;
+            parentName = segList[segList.size()-1];
+        }
+        
+        if((*segList.end()) == "Float_V"){
+            this->isModuleParameter = true;
+            
+            isMaster = true;
+            parentName = segList[segList.size()-2];
+        }
+        
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){
@@ -162,7 +202,9 @@ public:
     
     
 	
-	bool isOpacityParameter = false;
+    bool isOpacityParameter = false;
+    bool isFixtureParameter = false;
+    bool isModuleParameter = false;
     bool isMaster = false;
     string connectedMedia;
     void setConnectedMediaName( string name ){ this->connectedMedia = name; };
