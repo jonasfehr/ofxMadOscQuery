@@ -706,12 +706,12 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> &pages, MadPa
             // detect Groups
             if (keyType == "surfaces" && element["CONTENTS"]["output"].is_null())
             {
-                cout << "Detected as Group" << endl;
+                //cout << "Detected as Group" << endl;
                 bIsGroup = true;
             }
             else if (keyType == "fixtures" && element["CONTENTS"].size() > 10)
             {
-                cout << "Detected as Group" << endl;
+                //cout << "Detected as Group" << endl;
                 bIsGroup = true;
             }
             else
@@ -728,7 +728,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> &pages, MadPa
 
             auto customJson = ofJson::parse("{ \"pages\": [{\"name\": \"" + groupName + "_SubPage\", \"surfaces\": [\"" + searchString + "\"]}]}");
 
-            cout << customJson << endl;
+            //cout << customJson << endl;
             createCustomPage(pages, midiDevice, customJson);
 
             // create pages for elements in group
@@ -806,8 +806,8 @@ void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup &syncGroup)
 //--------------------------------------------------------------
 MadParameter *ofxMadOscQuery::createParameter(ofJson parameterValues)
 {
-    cout << parameterValues << endl;
-    cout << endl;
+   // cout << parameterValues << endl;
+   // cout << endl;
     std::string key = parameterValues["FULL_PATH"];
     parameterMap[key] = MadParameter(parameterValues);
     auto val = &parameterMap.operator[](key);
