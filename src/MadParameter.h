@@ -45,6 +45,45 @@ public:
         this->doSendOsc = doSendOsc;
     };
     
+    MadParameter(const MadParameter& other) {
+        // Copy basic parameter properties
+        this->set(other);
+        
+        // Copy custom properties
+        this->bSelectable = other.bSelectable;
+        this->bIsGroup = other.bIsGroup;
+        this->doSendOsc = other.doSendOsc;
+        this->range = other.range;
+        this->updateFromMidi = other.updateFromMidi;
+        this->oscAddress = other.oscAddress;
+        this->isOpacityParameter = other.isOpacityParameter;
+        this->isFixtureParameter = other.isFixtureParameter;
+        this->isModuleParameter = other.isModuleParameter;
+        this->isMaster = other.isMaster;
+        this->connectedMedia = other.connectedMedia;
+        this->parentName = other.parentName;
+    }
+    
+    MadParameter& operator=(const MadParameter& other) {
+        if (this != &other) {  // Check for self-assignment
+            // Copy basic properties
+            this->set(other.get());
+            this->bSelectable = other.bSelectable;
+            this->bIsGroup = other.bIsGroup;
+            this->doSendOsc = other.doSendOsc;
+            this->range = other.range;
+            this->updateFromMidi = other.updateFromMidi;
+            this->oscAddress = other.oscAddress;
+            this->isOpacityParameter = other.isOpacityParameter;
+            this->isFixtureParameter = other.isFixtureParameter;
+            this->isModuleParameter = other.isModuleParameter;
+            this->isMaster = other.isMaster;
+            this->connectedMedia = other.connectedMedia;
+            this->parentName = other.parentName;
+        }
+        return *this;
+    }
+    
 //    MadParameter(ofJson parameterValues, string name){
 //        this->setOscAddress(parameterValues["FULL_PATH"].get<std::string>());
 //        this->setName(name);
@@ -109,7 +148,6 @@ public:
             ofxOscMessage m;
             
             if(this->isOpacityParameter){
-                // TODO: Send visible
                 auto newAddress = this->oscAddress;
                 auto start_position_to_erase = newAddress.find("opacity");
                 newAddress.erase(start_position_to_erase, ofToString("opacity").size());
@@ -122,7 +160,6 @@ public:
                 ofNotifyEvent(oscSendEvent,m,this);
             }
             if(this->isFixtureParameter){
-                // TODO: Send visible
                 auto newAddress = this->oscAddress;
                 auto start_position_to_erase = newAddress.find("luminosity");
                 newAddress.erase(start_position_to_erase, ofToString("luminosity").size());
@@ -134,19 +171,7 @@ public:
                 else    m.addIntArg(0);
                 ofNotifyEvent(oscSendEvent,m,this);
             }
-            if(this->isModuleParameter){
-                // TODO: Send visible
-                auto newAddress = this->oscAddress;
-                auto start_position_to_erase = newAddress.find("luminosity");
-                newAddress.erase(start_position_to_erase, ofToString("luminosity").size());
-                newAddress += "visible";
-                
-                m.clear();
-                m.setAddress(newAddress);
-                if(p>0) m.addIntArg(1);
-                else    m.addIntArg(0);
-                ofNotifyEvent(oscSendEvent,m,this);
-            }
+
             m.clear();
             m.setAddress(oscAddress);
             m.addFloatArg(getParameterValue());
@@ -182,10 +207,10 @@ public:
             parentName = segList[segList.size()-1];
         }
         
-        if((*segList.end()) == "Float_V"){
+        if((*segList.end()) == "Float_Value"){
             this->isModuleParameter = true;
             
-            isMaster = true;
+            isMaster = false;
             parentName = segList[segList.size()-2];
         }
         

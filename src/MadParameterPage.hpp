@@ -54,7 +54,7 @@ public:
 		{
 			if (paramName == "opacity" || paramName == "red" || paramName == "green" || paramName == "blue")
 			{
-				list<MadParameter *>::iterator it = parameters.begin();
+				std::list<MadParameter *>::iterator it = parameters.begin();
 				parameters.push_front(parameter);
 			}
 			else
