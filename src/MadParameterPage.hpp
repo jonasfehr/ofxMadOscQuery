@@ -30,7 +30,7 @@ public:
 			parameter++;
 		}
 
-		for (int i = 1; i < 9; i++)
+		for (int i = 1; i < 17; i++)
 		{
 			if (parameter != parameters.end())
 			{
@@ -63,14 +63,14 @@ public:
 			}
 		}
 		int upper = parameters.size(); // set range
-		if (upper > 8)
-			upper = 8;
+		if (upper > 16)
+			upper = 16;
 		range = std::make_pair(1, upper);
 	}
 
 	void setLowerBound(int lower)
 	{
-		int upper = lower + 7;
+		int upper = lower + 15;
 		if (upper > parameters.size())
 		{
 			upper = parameters.size();
@@ -132,7 +132,7 @@ public:
 		}
 
 		linkedParamGroup.clear();
-		for (int i = 1; i < 9; i++)
+		for (int i = 1; i < 17; i++)
 		{
 			if (parameter != parameters.end())
 			{
@@ -157,7 +157,7 @@ public:
 			prevParameter++;
 		}
 
-		for (int i = 1; i < 9 && (prevParameter != parameters.end()); i++)
+		for (int i = 1; i < 17 && (prevParameter != parameters.end()); i++)
 		{
 			(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			prevParameter++;
@@ -172,8 +172,8 @@ public:
 		{
 			int lower = 1;
 			int upper = parameters.size(); // set range
-			if (upper > 8)
-				upper = 8;
+			if (upper > 16)
+				upper = 16;
 			range = std::make_pair(lower, upper);
 		}
 		return range;
