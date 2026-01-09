@@ -11,13 +11,15 @@ class MadParameterPage
 public:
 	ofParameterGroup linkedParamGroup;
 
-	MadParameterPage(std::string name, ofxMidiDevice *midiDevice, bool isSubpage = false, bool isGroup = false)
+	MadParameterPage(std::string name, ofxMidiDevice *midiDevice, int numParamVis = 13, bool isSubpage = false, bool isGroup = false)
 	{
 		this->name = name;
 		this->midiDevice = midiDevice;
 		ofLog() << "Constructor for " << this->name << " called!" << endl;
+        this -> numParamVis = numParamVis;
 		bSubpage = isSubpage;
 		bIsGroup = isGroup;
+        linkedParamGroup.setName("Page");
 	};
 
 	~MadParameterPage(){};
@@ -30,7 +32,7 @@ public:
 			parameter++;
 		}
 
-		for (int i = 1; i < 17; i++)
+		for (int i = 1; i < numParamVis+1; i++)
 		{
 			if (parameter != parameters.end())
 			{
@@ -63,14 +65,14 @@ public:
 			}
 		}
 		int upper = parameters.size(); // set range
-		if (upper > 16)
-			upper = 16;
+		if (upper > numParamVis)
+			upper = numParamVis;
 		range = std::make_pair(1, upper);
 	}
 
 	void setLowerBound(int lower)
 	{
-		int upper = lower + 15;
+		int upper = lower + numParamVis - 1;
 		if (upper > parameters.size())
 		{
 			upper = parameters.size();
@@ -132,7 +134,7 @@ public:
 		}
 
 		linkedParamGroup.clear();
-		for (int i = 1; i < 17; i++)
+		for (int i = 1; i < numParamVis+1; i++)
 		{
 			if (parameter != parameters.end())
 			{
@@ -157,7 +159,7 @@ public:
 			prevParameter++;
 		}
 
-		for (int i = 1; i < 17 && (prevParameter != parameters.end()); i++)
+		for (int i = 1; i < numParamVis+1 && (prevParameter != parameters.end()); i++)
 		{
 			(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 			prevParameter++;
@@ -172,8 +174,8 @@ public:
 		{
 			int lower = 1;
 			int upper = parameters.size(); // set range
-			if (upper > 16)
-				upper = 16;
+			if (upper > numParamVis)
+				upper = numParamVis;
 			range = std::make_pair(lower, upper);
 		}
 		return range;
@@ -188,6 +190,7 @@ public:
 private:
 	bool bSubpage;
 	bool bIsGroup;
+    int numParamVis;
 	std::list<MadParameter *> parameters;
 	std::string name = "";
 	std::pair<int, int> range;

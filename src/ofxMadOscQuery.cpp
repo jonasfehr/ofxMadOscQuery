@@ -9,18 +9,22 @@ ofxMadOscQuery::~ofxMadOscQuery()
     }
 }
 
-void ofxMadOscQuery::setup(string ip, int sendPort, int receivePort)
+void ofxMadOscQuery::setup(string ip, int sendPort, int feedbackPort, int queryPort)
 {
     this->ip = ip;
     this->sendPort = sendPort;
-    this->receivePort = receivePort;
-    this->receiveAddress = "http://" + ip + ":" + ofToString(sendPort);
+    this->receivePort = feedbackPort;
+	this->receiveAddress = "http://" + ip + ":" +  ofToString(queryPort);
     oscSender.setup(ip, sendPort);
-    oscReceiver.setup(receivePort);
+    oscReceiver.setup(feedbackPort);
 
     //    this->madMapperJson = receive(); // ofLoadJson("rawExample.json"); //
 }
 
+void ofxMadOscQuery::setup(string ip, int sendPort, int feedbackPort)
+{
+	this->setup(ip, sendPort, feedbackPort, sendPort);
+}
 //--------------------------------------------------------------
 ofJson ofxMadOscQuery::receive()
 {

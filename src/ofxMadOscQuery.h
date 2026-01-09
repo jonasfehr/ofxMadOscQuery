@@ -37,7 +37,8 @@ public:
 
     int sendPort, receivePort;
 
-    void setup(string ip, int sendPort, int receivePort);
+	void setup(string ip, int sendPort, int receivePort, int queryPort);
+	void setup(string ip, int sendPort, int receivePort);
 
     void oscSendToMadMapper(ofxOscMessage &m);
 
