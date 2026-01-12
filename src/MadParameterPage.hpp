@@ -16,10 +16,10 @@ public:
 		this->name = name;
 		this->midiDevice = midiDevice;
 		ofLog() << "Constructor for " << this->name << " called!" << endl;
-        this -> numParamVis = numParamVis;
+		this -> numParamVis = numParamVis;
 		bSubpage = isSubpage;
 		bIsGroup = isGroup;
-        linkedParamGroup.setName("Page");
+		linkedParamGroup.setName("Page");
 	};
 
 	~MadParameterPage(){};
@@ -138,6 +138,12 @@ public:
 		{
 			if (parameter != parameters.end())
 			{
+				// Ensure parameter has a non-empty name before adding to group
+				if((*parameter)->getName().empty()){
+					std::string fallback = (*parameter)->getDisplayParameterName();
+					if(fallback.empty()) fallback = "param_" + ofToString(i);
+					(*parameter)->setName(fallback);
+				}
 				(*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
 				linkedParamGroup.add(*(*parameter));
 				parameter++;
@@ -190,7 +196,7 @@ public:
 private:
 	bool bSubpage;
 	bool bIsGroup;
-    int numParamVis;
+	int numParamVis;
 	std::list<MadParameter *> parameters;
 	std::string name = "";
 	std::pair<int, int> range;
