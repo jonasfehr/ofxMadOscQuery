@@ -12,13 +12,17 @@
 #include "ofxOsc.h"
 #include "ofxOscParameterSync.h"
 
-#include "MadParameterPage.hpp"
 #include "MadParameter.h"
+#include "MadParameterPage.hpp"
+
+#include "OscQueryWebSocketClient.h"
+#include <atomic>
+#include <mutex>
+#include <thread>
 
 #define DEBUG true
 
-class ofxMadOscQuery
-{
+class ofxMadOscQuery {
 public:
 	ofxMadOscQuery();
 	~ofxMadOscQuery();
@@ -40,30 +44,30 @@ public:
 	void setup(string ip, int sendPort, int receivePort, int queryPort);
 	void setup(string ip, int sendPort, int receivePort);
 
-	void oscSendToMadMapper(ofxOscMessage &m);
+	void oscSendToMadMapper(ofxOscMessage & m);
 
-	void oscReceiveMessages(ofParameterGroup &syncGroup);
+	void oscReceiveMessages(ofParameterGroup & syncGroup);
 
 	ofJson receive();
 	//    void createParameterMap(ofJson json);
 	//    void getParameterList(ofJson json, vector<string> skipKeys);
-	map<string, ofJson> getContentMap(const ofJson &json, const string &key, const vector<string> &skipKeys);
+	map<string, ofJson> getContentMap(const ofJson & json, const string & key, const vector<string> & skipKeys);
 	//    void iterateContents(ofJson json);
-	void iterateFind(const ofJson &json, const string &key, MadParameterPage *customPage, const ofJson &jsonSkipKeys);
-	void iterateFind(ofJson &jsonReturn, const ofJson &json, const string &key, const ofJson &jsonSkipKeys);
+	void iterateFind(const ofJson & json, const string & key, MadParameterPage * customPage, const ofJson & jsonSkipKeys);
+	void iterateFind(ofJson & jsonReturn, const ofJson & json, const string & key, const ofJson & jsonSkipKeys);
 
-	void createSubPages(std::list<MadParameterPage> &page, ofxMidiDevice *midiDevice, const ofJson &json);
-	void setupPageFromJson(std::list<MadParameterPage> &pages, MadParameterPage &page, ofxMidiDevice *midiDevice, const ofJson &json, const string &keyType);
+	void createSubPages(std::list<MadParameterPage> & page, ofxMidiDevice * midiDevice, const ofJson & json);
+	void setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & json, const string & keyType);
 
-	void createCustomPage(std::list<MadParameterPage> &pages, ofxMidiDevice *midiDevice, const ofJson &json);
-	void createCustomPages(ofxMidiDevice *midiDevice, const ofJson &jsonPages, const ofJson &madMapperJson);
+	void createCustomPage(std::list<MadParameterPage> & pages, ofxMidiDevice * midiDevice, const ofJson & json);
+	void createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson);
 	std::string getStatusString();
-	bool matchesGroupWildcard(const std::string &paramName, const std::string &elementName);
-	void getConnectedMediaName(string *mediaName, const ofJson &json, const string &key, const ofJson &jsonSkipKeys);
+	bool matchesGroupWildcard(const std::string & paramName, const std::string & elementName);
+	void getConnectedMediaName(string * mediaName, const ofJson & json, const string & key, const ofJson & jsonSkipKeys);
 
-	MadParameter *createParameter(ofJson parameterValues);
-	MadParameter *createParameter(ofJson parameterValues, std::string name);
-	void addParameterToCustomPage(const ofJson &element, const std::string &type, MadParameterPage *customPage);
+	MadParameter * createParameter(ofJson parameterValues);
+	MadParameter * createParameter(ofJson parameterValues, std::string name);
+	void addParameterToCustomPage(const ofJson & element, const std::string & type, MadParameterPage * customPage);
 	std::map<std::string, MadParameter> parameterMap;
 
 	void updateValues();
@@ -74,4 +78,14 @@ public:
 	std::list<MadParameterPage> subPages;
 	std::list<MadParameterPage> mediaPages;
 	ofJson madMapperJson;
+
+	bool connectWebSocket(int port);
+	void disconnectWebSocket();
+	void subscribeAllParameters();
+	void subscribeParameter(const std::string& path);
+	bool isWebSocketConnected() const;
+
+private:
+	std::unique_ptr<OscQueryWebSocketClient> wsClient;
+	std::mutex paramMutex;
 };
