@@ -543,63 +543,143 @@ void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup & syncGroup) {
 
 //--------------------------------------------------------------
 MadParameter * ofxMadOscQuery::createParameter(ofJson parameterValues) {
-	// cout << parameterValues << endl;
-	// cout << endl;
 	std::string key = parameterValues["FULL_PATH"];
 	parameterMap[key] = MadParameter(parameterValues);
 	auto val = &parameterMap.operator[](key);
 	ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
 	return val;
 }
-////--------------------------------------------------------------
-// MadParameter* ofxMadOscQuery::createParameter(ofJson parameterValues, std::string name){
-//     std::string key = parameterValues["FULL_PATH"];
-//     parameterMap[key] = MadParameter(parameterValues,name);
-//     auto val = &parameterMap.operator[](key);
-//     ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);
-//     return val;
-// }
 
+// -------------------------------------------------------------- WebSocket support
 bool ofxMadOscQuery::connectWebSocket(int port) {
-	if (!wsClient) wsClient = std::make_unique<OscQueryWebSocketClient>();
-
-	// Connect and set up a message handler that updates parameters.
-	return wsClient->connect(ip, port, [this](const std::string& payload) {
-		std::lock_guard<std::mutex> lock(paramMutex);
-		// naive handler: expect {"FULL_PATH":"/path","VALUE":[v]} JSON
-		try {
-			ofJson msg = ofJson::parse(payload);
-			if (!msg.contains("FULL_PATH") || !msg.contains("VALUE")) return;
-			auto path = msg["FULL_PATH"].get<std::string>();
-			if (!parameterMap.count(path)) return;
-			auto & param = parameterMap[path];
-			if (msg["VALUE"].is_array() && !msg["VALUE"].empty()) {
-				param.setFromRemoteRaw(msg["VALUE"].at(0));
-			}
-		} catch (...) {
-			// ignore malformed payloads
-		}
-	});
-}
-
-bool ofxMadOscQuery::isWebSocketConnected() const {
-	return wsClient != nullptr;
+	if (!wsClient) {
+		wsClient = std::make_unique<OscQueryWebSocketClient>();
+	}
+	std::string host = ip.empty() ? "127.0.0.1" : ip;
+	wsConnected = wsClient->connect(host, port, [this](const std::string & msg) { handleWebSocketMessage(msg); });
+	if (!wsConnected) {
+		ofLogWarning("ofxMadOscQuery") << "WebSocket connect failed to " << host << ":" << port;
+		subscribedPaths.clear();
+	} else {
+		ofLogNotice("ofxMadOscQuery") << "WebSocket connected on port " << port;
+	}
+	return wsConnected;
 }
 
 void ofxMadOscQuery::disconnectWebSocket() {
 	if (wsClient) wsClient->disconnect();
+	wsConnected = false;
+	subscribedPaths.clear();
 }
 
+bool ofxMadOscQuery::isWebSocketConnected() const { return wsConnected; }
+
 void ofxMadOscQuery::subscribeParameter(const std::string & path) {
-	if (!wsClient) return;
+	if (!wsClient || !wsConnected) return;
+	if (subscribedPaths.find(path) != subscribedPaths.end()) return;
 	ofJson msg;
 	msg["COMMAND"] = "LISTEN";
 	msg["DATA"] = path;
-	wsClient->sendText(msg.dump());
+	if (wsClient->sendText(msg.dump())) {
+		subscribedPaths.insert(path);
+		ofLogNotice("ofxMadOscQuery") << "LISTEN " << path;
+	}
 }
 
 void ofxMadOscQuery::subscribeAllParameters() {
-	for (auto & kv : parameterMap) {
-		subscribeParameter(kv.first);
+	if (!wsClient || !wsConnected) return;
+	for (auto & kv : parameterMap) subscribeParameter(kv.first);
+}
+
+void ofxMadOscQuery::subscribePageParameters(const MadParameterPage & page) {
+	if (!wsClient || !wsConnected) return;
+	auto * params = page.getParameters();
+	if (!params) return;
+	for (auto * p : *params) {
+		if (!p) continue;
+		subscribeParameter(p->getOscAddress());
 	}
 }
+
+void ofxMadOscQuery::unsubscribeAll() {
+	if (wsClient && wsConnected) {
+		ofJson msg;
+		msg["COMMAND"] = "LISTEN";
+		msg["DATA"] = ofJson::array();
+		wsClient->sendText(msg.dump());
+	}
+	subscribedPaths.clear();
+}
+
+void ofxMadOscQuery::pullPageValues(const MadParameterPage & page) {
+	madMapperJson = receive();
+	auto * params = page.getParameters();
+	if (!params) return;
+	for (auto * p : *params) {
+		if (!p) continue;
+		const std::string path = p->getOscAddress();
+		if (path.empty()) continue;
+		vector<string> seg = ofSplitString(path, "/");
+		ofJson json = madMapperJson;
+		bool found = true;
+		for (size_t i = 1; i < seg.size(); ++i) {
+			auto it = json.find("CONTENTS");
+			if (it == json.end()) { found = false; break; }
+			json = (*it)[seg[i]];
+			if (json.is_null()) { found = false; break; }
+		}
+		if (found && json.contains("VALUE") && json["VALUE"].is_array() && !json["VALUE"].empty()) {
+			std::lock_guard<std::mutex> lock(paramMutex);
+			p->setFromRemoteRaw(json["VALUE"].at(0));
+		}
+	}
+}
+
+void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
+	ofJson json;
+	try {
+		json = ofJson::parse(msg);
+	} catch (const std::exception & e) {
+		ofLogWarning("ofxMadOscQuery") << "WS parse failed: " << e.what();
+		return;
+	}
+
+	std::string path;
+	if (json.contains("PATH") && json["PATH"].is_string()) path = json["PATH"].get<std::string>();
+	else if (json.contains("NAME") && json["NAME"].is_string()) path = json["NAME"].get<std::string>();
+	else if (json.contains("FULL_PATH") && json["FULL_PATH"].is_string()) path = json["FULL_PATH"].get<std::string>();
+
+	if (path.empty()) {
+		ofLogWarning("ofxMadOscQuery") << "WS message missing PATH/NAME/FULL_PATH";
+		return;
+	}
+
+	auto it = parameterMap.find(path);
+	if (it == parameterMap.end()) {
+		ofLogWarning("ofxMadOscQuery") << "WS update for unknown path " << path;
+		return;
+	}
+
+	float value = 0.f;
+	bool gotVal = false;
+	if (json.contains("VALUE") && json["VALUE"].is_array() && !json["VALUE"].empty()) {
+		value = json["VALUE"].at(0).get<float>();
+		gotVal = true;
+	} else if (json.contains("ARGS") && json["ARGS"].is_array() && !json["ARGS"].empty()) {
+		value = json["ARGS"].at(0).get<float>();
+		gotVal = true;
+	}
+
+	if (!gotVal) {
+		ofLogWarning("ofxMadOscQuery") << "WS message missing VALUE/ARGS for " << path;
+		return;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(paramMutex);
+		float current = it->second.get();
+		if (std::fabs(current - value) < 1e-6f) return; // avoid echo loop
+		it->second.setFromRemoteRaw(value);
+	}
+}
+

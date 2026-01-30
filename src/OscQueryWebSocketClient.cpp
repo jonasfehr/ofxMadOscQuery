@@ -1,4 +1,6 @@
 #include "OscQueryWebSocketClient.h"
+#include <cstring>
+#include <Poco/ByteOrder.h>
 
 using Poco::Net::HTTPClientSession;
 using Poco::Net::HTTPRequest;
@@ -67,7 +69,6 @@ void OscQueryWebSocketClient::listen() {
 		int flags = 0;
 		int n = 0;
 		try {
-			// Copy socket pointer under lock, then call receiveFrame without holding the mutex.
 			Poco::Net::WebSocket* wsRaw = nullptr;
 			{
 				std::lock_guard<std::mutex> lock(socketMutex);
@@ -81,12 +82,44 @@ void OscQueryWebSocketClient::listen() {
 			const int op = (flags & WebSocket::FRAME_OP_BITMASK);
 			if (op == WebSocket::FRAME_OP_CLOSE) break;
 
-			// OSCQuery uses JSON-ish payloads; ignore unexpected binary frames.
 			if (op == WebSocket::FRAME_OP_TEXT) {
 				if (onMessage) onMessage(std::string(buffer, buffer + n));
+			} else if (op == WebSocket::FRAME_OP_BINARY) {
+				// Parse simple OSC packet: address, type tag, first arg
+				const char* data = buffer;
+				const char* end = buffer + n;
+				const char* addrEnd = (const char*)memchr(data, '\0', end - data);
+				if (!addrEnd) continue;
+				std::string address(data, addrEnd);
+				// align to 4 bytes
+				const char* p = addrEnd + 1;
+				while (((uintptr_t)p % 4) != 0 && p < end) ++p;
+				if (p >= end) continue;
+				const char* typeEnd = (const char*)memchr(p, '\0', end - p);
+				if (!typeEnd) continue;
+				std::string typeTag(p, typeEnd);
+				p = typeEnd + 1;
+				while (((uintptr_t)p % 4) != 0 && p < end) ++p;
+				if (p >= end) continue;
+
+				float fval = 0.f;
+				bool gotVal = false;
+				if (typeTag.size() >= 2 && typeTag[0] == ',' && typeTag[1] == 'f' && (p + 4) <= end) {
+					uint32_t be = 0;
+					std::memcpy(&be, p, 4);
+					be = Poco::ByteOrder::fromBigEndian(be);
+					std::memcpy(&fval, &be, 4);
+					gotVal = true;
+				}
+
+				if (gotVal && onMessage) {
+					ofJson msg;
+					msg["FULL_PATH"] = address;
+					msg["VALUE"] = ofJson::array({fval});
+					onMessage(msg.dump());
+				}
 			}
 		} catch (const Poco::TimeoutException&) {
-			// Expected idle; keep looping while "running".
 			continue;
 		} catch (const std::exception& e) {
 			if (running) {

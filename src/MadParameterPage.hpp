@@ -100,6 +100,10 @@ public:
 	{
 		return &this->parameters;
 	}
+	const std::list<MadParameter *>* getParameters() const
+	{
+		return &this->parameters;
+	}
 
 	void cycleForward()
 	{

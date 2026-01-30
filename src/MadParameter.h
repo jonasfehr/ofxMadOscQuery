@@ -107,8 +107,11 @@ public:
 		return value;
 	}
 	
+	bool suppressOscSend = false;
 	// Use when applying values received from remote OSCQuery (raw units)
 	void setFromRemoteRaw(float raw){
+		// Mark as remote so onParameterChange will not emit OSC
+		suppressOscSend = true;
 		this->set(ofMap(raw, range.min, range.max, 0, 1, true));
 	}
 	
@@ -169,7 +172,11 @@ public:
 	void onParameterChange(float & p){
 		updateFromMidi = true;
 		this->set(p);
-		
+		// If this change came from remote feedback, skip emitting OSC to avoid loops
+		if(suppressOscSend){
+			suppressOscSend = false;
+			return;
+		}
 		if(doSendOsc){
 			ofxOscMessage m;
 			

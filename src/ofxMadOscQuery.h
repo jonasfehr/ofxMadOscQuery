@@ -19,6 +19,7 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 
 #define DEBUG true
 
@@ -66,7 +67,6 @@ public:
 	void getConnectedMediaName(string * mediaName, const ofJson & json, const string & key, const ofJson & jsonSkipKeys);
 
 	MadParameter * createParameter(ofJson parameterValues);
-	MadParameter * createParameter(ofJson parameterValues, std::string name);
 	void addParameterToCustomPage(const ofJson & element, const std::string & type, MadParameterPage * customPage);
 	std::map<std::string, MadParameter> parameterMap;
 
@@ -83,9 +83,15 @@ public:
 	void disconnectWebSocket();
 	void subscribeAllParameters();
 	void subscribeParameter(const std::string& path);
+	void subscribePageParameters(const MadParameterPage& page);
+	void unsubscribeAll();
 	bool isWebSocketConnected() const;
+	void pullPageValues(const MadParameterPage& page);
 
 private:
 	std::unique_ptr<OscQueryWebSocketClient> wsClient;
 	std::mutex paramMutex;
+	std::unordered_set<std::string> subscribedPaths;
+	bool wsConnected = false;
+	void handleWebSocketMessage(const std::string& msg);
 };
