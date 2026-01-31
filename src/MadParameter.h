@@ -11,6 +11,8 @@
 //#include "ofMain.h"
 #include "ofxMidiDevice.h"
 #include "ofxOsc.h"
+#include <vector>
+#include <chrono>
 
 class MadParameter : public ofParameter<float>{
 public:
@@ -107,9 +109,20 @@ public:
 		return value;
 	}
 	
+	// Direction-lock to avoid tug-of-war: last source + timestamp
+	enum class InputSource { None, Midi, Remote };
+	InputSource currentMaster = InputSource::None;
+	std::chrono::steady_clock::time_point masterStamp { std::chrono::steady_clock::now() };
+	std::chrono::milliseconds masterWindow { 10 }; // adjust if motors are slower
 	bool suppressOscSend = false;
 	// Use when applying values received from remote OSCQuery (raw units)
 	void setFromRemoteRaw(float raw){
+		auto now = std::chrono::steady_clock::now();
+		// If current master is MIDI and still within window, ignore remote
+		if (currentMaster == InputSource::Midi && (now - masterStamp) < masterWindow) return;
+		currentMaster = InputSource::Remote;
+		masterStamp = now;
+
 		// Mark as remote so onParameterChange will not emit OSC
 		suppressOscSend = true;
 		this->set(ofMap(raw, range.min, range.max, 0, 1, true));
@@ -170,11 +183,21 @@ public:
 
 //    // Send OSC when parameter changed
 	void onParameterChange(float & p){
+		auto now = std::chrono::steady_clock::now();
 		updateFromMidi = true;
 		this->set(p);
-		// If this change came from remote feedback, skip emitting OSC to avoid loops
+		// Decide master: if recent remote, ignore MIDI changes until window passes
+		if (currentMaster == InputSource::Remote && (now - masterStamp) < masterWindow) {
+			updateFromMidi = false;
+			return;
+		}
+		currentMaster = InputSource::Midi;
+		masterStamp = now;
+
+		// If this change came from remote feedback, skip emitting OSC
 		if(suppressOscSend){
 			suppressOscSend = false;
+			updateFromMidi = false;
 			return;
 		}
 		if(doSendOsc){
