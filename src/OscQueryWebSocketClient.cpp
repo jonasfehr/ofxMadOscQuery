@@ -85,7 +85,7 @@ void OscQueryWebSocketClient::listen() {
 			if (op == WebSocket::FRAME_OP_TEXT) {
 				if (onMessage) onMessage(std::string(buffer, buffer + n));
 			} else if (op == WebSocket::FRAME_OP_BINARY) {
-				// Parse simple OSC packet: address, type tag, first arg
+				// Parse OSC packet: always forward address, optionally include first float arg.
 				const char* data = buffer;
 				const char* end = buffer + n;
 				const char* addrEnd = (const char*)memchr(data, '\0', end - data);
@@ -112,10 +112,12 @@ void OscQueryWebSocketClient::listen() {
 					gotVal = true;
 				}
 
-				if (gotVal && onMessage) {
+				if (onMessage) {
 					ofJson msg;
 					msg["FULL_PATH"] = address;
-					msg["VALUE"] = ofJson::array({fval});
+					if (gotVal) {
+						msg["VALUE"] = ofJson::array({fval});
+					}
 					onMessage(msg.dump());
 				}
 			}

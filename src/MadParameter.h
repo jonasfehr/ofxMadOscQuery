@@ -9,7 +9,8 @@
 #define MadParameter_h
 
 //#include "ofMain.h"
-#include "ofxMidiDevice.h"
+#include "ofMain.h"
+#include "MidiComponent.h"
 #include "ofxOsc.h"
 #include <vector>
 #include <chrono>

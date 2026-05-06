@@ -73,6 +73,7 @@ public:
 	void updateValues();
 
 	ofEvent<string> mediaNameE;
+	ofEvent<string> webSocketPathE;
 
 	std::list<MadParameterPage> pages;
 	std::list<MadParameterPage> subPages;

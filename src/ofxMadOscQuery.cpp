@@ -654,9 +654,12 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 		return;
 	}
 
+	// Forward raw path updates so higher layers (e.g. cue timeline grid) can react
+	// even when the path is not part of parameterMap.
+	ofNotifyEvent(webSocketPathE, path, this);
+
 	auto it = parameterMap.find(path);
 	if (it == parameterMap.end()) {
-		ofLogWarning("ofxMadOscQuery") << "WS update for unknown path " << path;
 		return;
 	}
 
