@@ -1,6 +1,22 @@
 #include "ofxMadOscQuery.h"
 #include "OscQueryWebSocketClient.h"
 
+namespace {
+const ofJson* resolveNodeByFullPath(const ofJson& root, std::string path) {
+	if (path.empty()) return nullptr;
+	if (path.front() == '/') path.erase(path.begin());
+	const ofJson* node = &root;
+	for (const auto& token : ofSplitString(path, "/", true, true)) {
+		auto contentsIt = node->find("CONTENTS");
+		if (contentsIt == node->end() || !contentsIt->is_object()) return nullptr;
+		auto childIt = contentsIt->find(token);
+		if (childIt == contentsIt->end()) return nullptr;
+		node = &(*childIt);
+	}
+	return node;
+}
+}
+
 ofxMadOscQuery::ofxMadOscQuery() { }
 ofxMadOscQuery::~ofxMadOscQuery() {
 	for (auto & parameter : parameterMap) {
@@ -265,7 +281,6 @@ void ofxMadOscQuery::getConnectedMediaName(string * mediaName, const ofJson & js
 		auto itVal = json.find("VALUE");
 		if (itVal != json.end() && itVal->is_array() && !itVal->empty() && (*itVal)[0].is_string()) {
 			*mediaName = (*itVal)[0].get<std::string>();
-			ofStringReplace(*mediaName, " ", "_");
 		}
 	}
 
@@ -294,7 +309,7 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 		if (param.second.isMaster) {
 			std::string name = param.second.parentName;
 
-			MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
+			MadParameterPage customSubpage = MadParameterPage(name, midiDevice, 13, true);
 			for (auto & element : jsonSubpages["opacity"]["elements"]) {
 				string newKey = "*/" + name + element.get<std::string>();
 				iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"]);
@@ -312,26 +327,29 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 			getConnectedMediaName(&mediaName, madMapperJson, newKey, jsonSubpages["medias"]["skipKeys"]);
 
 			if (!mediaName.empty() && mediaName != "4x4.png") {
-				MadParameterPage customMediaSubpage = MadParameterPage(mediaName, midiDevice, true);
-				param.second.setConnectedMediaName(mediaName);
-				for (auto & element : jsonSubpages["medias"]["elements"]) {
-					string mediaKey = "/medias/" + mediaName + element.get<std::string>();
-					iterateFind(madMapperJson, mediaKey, &customMediaSubpage, jsonSubpages["medias"]["skipKeys"]);
-				}
-				subPages.push_back(customMediaSubpage);
-			}
-		}
-	}
+				MadParameterPage customMediaSubpage = MadParameterPage(mediaName, midiDevice, 13, true);
+				std::vector<std::string> mediaNameVariants;
+				mediaNameVariants.push_back(mediaName);
+				std::string normalizedMediaName = mediaName;
+				ofStringReplace(normalizedMediaName, " ", "_");
+				if (normalizedMediaName != mediaName) mediaNameVariants.push_back(normalizedMediaName);
 
-	for (auto & param : parameterMap) {
-		if (param.second.isMaster) {
-			std::string name = param.second.parentName;
-			MadParameterPage customSubpage = MadParameterPage(name, midiDevice, true);
-			for (auto & element : jsonSubpages["media"]["elements"]) {
-				string newKey = "*/" + name + element.get<std::string>();
-				iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"]);
+				for (const auto& mediaNameVariant : mediaNameVariants) {
+					const ofJson* mediaNode = resolveNodeByFullPath(madMapperJson, "/medias/" + mediaNameVariant);
+					if (!mediaNode) continue;
+					setupPageFromJson(subPages, customMediaSubpage, midiDevice, *mediaNode, "medias");
+					if (!customMediaSubpage.isEmpty()) break;
+				}
+
+				if (!customMediaSubpage.isEmpty()) {
+					ofLogNotice("ofxMadOscQuery") << "Created media subpage '" << mediaName
+						<< "' with " << customMediaSubpage.getParameters()->size() << " parameters";
+					param.second.setConnectedMediaName(mediaName);
+					subPages.push_back(customMediaSubpage);
+				} else {
+					ofLogNotice("ofxMadOscQuery") << "Media subpage for '" << mediaName << "' stayed empty";
+				}
 			}
-			subPages.push_back(customSubpage);
 		}
 	}
 }

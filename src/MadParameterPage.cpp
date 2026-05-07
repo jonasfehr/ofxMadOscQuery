@@ -3,6 +3,33 @@
 #include "MadParameter.h"
 #include "ofxMidiDevice.h"
 
+namespace {
+std::string controlLabelForSlot(ofxMidiDevice* midiDevice, int slot) {
+	if (!midiDevice || slot <= 0) return std::string();
+	const std::string slotStr = ofToString(slot);
+	const std::array<std::string, 3> roles{
+		"param." + slotStr + ".val_ctrl",
+		"param." + slotStr + ".fader",
+		"param." + slotStr + ".knob",
+	};
+	for (const auto& role : roles) {
+		auto it = midiDevice->bindings.find(role);
+		if (it != midiDevice->bindings.end() && midiDevice->midiComponents.count(it->second)) {
+			return it->second;
+		}
+	}
+
+	const std::array<std::string, 2> fallbacks{
+		"fader_" + slotStr,
+		"knob_" + slotStr,
+	};
+	for (const auto& label : fallbacks) {
+		if (midiDevice->midiComponents.count(label)) return label;
+	}
+	return std::string();
+}
+}
+
 MadParameterPage::MadParameterPage(std::string name, ofxMidiDevice *midiDevice, int numParamVis, bool isSubpage, bool isGroup)
 	: bSubpage(isSubpage)
 	, bIsGroup(isGroup)
@@ -26,17 +53,22 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 
 	for (int i = 1; i < numParamVis + 1; i++)
 	{
+		const std::string controlLabel = controlLabelForSlot(midiDevice, i);
 		if (parameter != parameters.end())
 		{
 			if ((*parameter)->updateFromMidi)
 				continue;
-			midiDevice->midiComponents["fader_" + ofToString(i)].value.set((*parameter)->get());
+			if (!controlLabel.empty()) {
+				midiDevice->midiComponents[controlLabel].value.set((*parameter)->get());
+			}
 
 			parameter++;
 		}
 		else
 		{
-			midiDevice->midiComponents["fader_" + ofToString(i)].value.set(0);
+			if (!controlLabel.empty()) {
+				midiDevice->midiComponents[controlLabel].value.set(0);
+			}
 		}
 	}
 }
@@ -132,6 +164,7 @@ void MadParameterPage::linkDevice()
 	linkedParamGroup.clear();
 	for (int i = 1; i < numParamVis + 1; i++)
 	{
+		const std::string controlLabel = controlLabelForSlot(midiDevice, i);
 		if (parameter != parameters.end())
 		{
 			if ((*parameter)->getName().empty())
@@ -140,13 +173,17 @@ void MadParameterPage::linkDevice()
 				if (fallback.empty()) fallback = "param_" + ofToString(i);
 				(*parameter)->setName(fallback);
 			}
-			(*parameter)->linkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+			if (!controlLabel.empty()) {
+				(*parameter)->linkMidiComponent(midiDevice->midiComponents[controlLabel]);
+			}
 			linkedParamGroup.add(*(*parameter));
 			parameter++;
 		}
 		else
 		{
-			midiDevice->midiComponents["fader_" + ofToString(i)].value.set(0);
+			if (!controlLabel.empty()) {
+				midiDevice->midiComponents[controlLabel].value.set(0);
+			}
 		}
 	}
 
@@ -163,7 +200,10 @@ void MadParameterPage::unlinkDevice()
 
 	for (int i = 1; i < numParamVis + 1 && (prevParameter != parameters.end()); i++)
 	{
-		(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents["fader_" + ofToString(i)]);
+		const std::string controlLabel = controlLabelForSlot(midiDevice, i);
+		if (!controlLabel.empty()) {
+			(*prevParameter)->unlinkMidiComponent(midiDevice->midiComponents[controlLabel]);
+		}
 		prevParameter++;
 	}
 
