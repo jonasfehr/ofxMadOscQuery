@@ -14,6 +14,7 @@
 #include "ofxOsc.h"
 #include <vector>
 #include <chrono>
+#include <limits>
 
 class MadParameter : public ofParameter<float>{
 public:
@@ -32,11 +33,18 @@ public:
 	MadParameter(ofJson parameterValues, bool doSendOsc = true){
 		this->setOscAddress(parameterValues["FULL_PATH"].get<std::string>());
 		this->setName(parameterValues["DESCRIPTION"].get<std::string>());
+		if(!parameterValues["TYPE"].is_null()){
+			parameterType = parameterValues["TYPE"].get<std::string>();
+		}
 		if(!parameterValues["RANGE"].is_null() ){
 			range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
 			range.max = parameterValues["RANGE"].at(0)["MAX"].get<float>();
 		}
-		float valueNormalized = ofMap(parameterValues["VALUE"].at(0), range.min, range.max, 0, 1);
+		float rawValue = 0.f;
+		if(!parameterValues["VALUE"].is_null() && parameterValues["VALUE"].is_array() && !parameterValues["VALUE"].empty()){
+			rawValue = parameterValues["VALUE"].at(0).get<float>();
+		}
+		float valueNormalized = ofMap(rawValue, range.min, range.max, 0, 1, true);
 		this->set(valueNormalized);
 		
 		bSelectable = false;
@@ -65,6 +73,7 @@ public:
 		this->isMaster = other.isMaster;
 		this->connectedMedia = other.connectedMedia;
 		this->parentName = other.parentName;
+		this->parameterType = other.parameterType;
 	}
 	
 	MadParameter& operator=(const MadParameter& other) {
@@ -83,6 +92,7 @@ public:
 			this->isMaster = other.isMaster;
 			this->connectedMedia = other.connectedMedia;
 			this->parentName = other.parentName;
+			this->parameterType = other.parameterType;
 		}
 		return *this;
 	}
@@ -106,16 +116,25 @@ public:
 	~MadParameter(){};
 	
 	float getParameterValue(){
-		float value = ofMap(this->get(), 0, 1, range.min, range.max);
+		float value = ofMap(this->get(), 0, 1, range.min, range.max, true);
 		return value;
+	}
+
+	int getParameterIntValue(){
+		return static_cast<int>(std::round(getParameterValue()));
 	}
 	
 	// Direction-lock to avoid tug-of-war: last source + timestamp
 	enum class InputSource { None, Midi, Remote };
 	InputSource currentMaster = InputSource::None;
 	std::chrono::steady_clock::time_point masterStamp { std::chrono::steady_clock::now() };
-	std::chrono::milliseconds masterWindow { 10 }; // adjust if motors are slower
+	std::chrono::milliseconds masterWindow { 200 };
 	bool suppressOscSend = false;
+	bool inRemoteUpdate = false;
+	std::chrono::steady_clock::time_point lastOscSendStamp { std::chrono::steady_clock::now() - std::chrono::milliseconds(1000) };
+	std::chrono::milliseconds minOscSendInterval { 8 };
+	float lastSentFloat = std::numeric_limits<float>::quiet_NaN();
+	int lastSentInt = std::numeric_limits<int>::min();
 	// Use when applying values received from remote OSCQuery (raw units)
 	void setFromRemoteRaw(float raw){
 		auto now = std::chrono::steady_clock::now();
@@ -124,9 +143,9 @@ public:
 		currentMaster = InputSource::Remote;
 		masterStamp = now;
 
-		// Mark as remote so onParameterChange will not emit OSC
-		suppressOscSend = true;
+		inRemoteUpdate = true;
 		this->set(ofMap(raw, range.min, range.max, 0, 1, true));
+		inRemoteUpdate = false;
 	}
 	
 	std::string getParameterName(){
@@ -172,9 +191,11 @@ public:
 	string getOscAddress(){ return oscAddress;}
 
 	struct Range{
-		float min;
-		float max;
+		float min = 0.f;
+		float max = 1.f;
 	} range;
+
+	std::string parameterType = "f";
 	
 	bool isGroup(){return bIsGroup;}
 	void setIsGroup(bool isGroup){bIsGroup = isGroup;}
@@ -184,23 +205,23 @@ public:
 
 //    // Send OSC when parameter changed
 	void onParameterChange(float & p){
-		auto now = std::chrono::steady_clock::now();
 		updateFromMidi = true;
 		this->set(p);
-		// Decide master: if recent remote, ignore MIDI changes until window passes
-		if (currentMaster == InputSource::Remote && (now - masterStamp) < masterWindow) {
-			updateFromMidi = false;
-			return;
-		}
-		currentMaster = InputSource::Midi;
-		masterStamp = now;
 
-		// If this change came from remote feedback, skip emitting OSC
-		if(suppressOscSend){
-			suppressOscSend = false;
+		if(inRemoteUpdate){
 			updateFromMidi = false;
 			return;
 		}
+
+		auto now = std::chrono::steady_clock::now();
+		if ((now - lastOscSendStamp) < minOscSendInterval) {
+			updateFromMidi = false;
+			return;
+		}
+
+		currentMaster = InputSource::Midi;
+		masterStamp = std::chrono::steady_clock::now();
+
 		if(doSendOsc){
 			ofxOscMessage m;
 			
@@ -235,8 +256,25 @@ public:
 
 			m.clear();
 			m.setAddress(oscAddress);
-			m.addFloatArg(getParameterValue());
+			if(parameterType == "i"){
+				int v = getParameterIntValue();
+				if (v == lastSentInt) {
+					updateFromMidi = false;
+					return;
+				}
+				m.addIntArg(v);
+				lastSentInt = v;
+			}else{
+				float v = getParameterValue();
+				if (!std::isnan(lastSentFloat) && std::fabs(v - lastSentFloat) < 1e-6f) {
+					updateFromMidi = false;
+					return;
+				}
+				m.addFloatArg(v);
+				lastSentFloat = v;
+			}
 			ofNotifyEvent(oscSendEvent,m,this);
+			lastOscSendStamp = now;
 		}
 		updateFromMidi = false;
 

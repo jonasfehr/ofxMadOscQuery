@@ -1,20 +1,226 @@
 #include "ofxMadOscQuery.h"
 #include "OscQueryWebSocketClient.h"
 
+#include <unordered_map>
+#include <unordered_set>
+
 namespace {
-const ofJson* resolveNodeByFullPath(const ofJson& root, std::string path) {
-	if (path.empty()) return nullptr;
-	if (path.front() == '/') path.erase(path.begin());
-	const ofJson* node = &root;
-	for (const auto& token : ofSplitString(path, "/", true, true)) {
-		auto contentsIt = node->find("CONTENTS");
-		if (contentsIt == node->end() || !contentsIt->is_object()) return nullptr;
-		auto childIt = contentsIt->find(token);
-		if (childIt == contentsIt->end()) return nullptr;
-		node = &(*childIt);
+	const ofJson* resolveNodeByFullPath(const ofJson& root, std::string path) {
+		if (path.empty()) return nullptr;
+		if (path.front() == '/') path.erase(path.begin());
+		const ofJson* node = &root;
+		for (const auto& token : ofSplitString(path, "/", true, true)) {
+			auto contentsIt = node->find("CONTENTS");
+			if (contentsIt == node->end() || !contentsIt->is_object()) return nullptr;
+			auto childIt = contentsIt->find(token);
+			if (childIt == contentsIt->end()) return nullptr;
+			node = &(*childIt);
+		}
+		return node;
 	}
-	return node;
-}
+
+	const ofJson* findNodeByExactFullPath(const ofJson& node, const std::string& targetPath) {
+		auto fullPathIt = node.find("FULL_PATH");
+		if (fullPathIt != node.end() && fullPathIt->is_string() && fullPathIt->get<std::string>() == targetPath) {
+			return &node;
+		}
+
+		auto contentsIt = node.find("CONTENTS");
+		if (contentsIt == node.end() || !contentsIt->is_object()) return nullptr;
+		for (auto it = contentsIt->begin(); it != contentsIt->end(); ++it) {
+			if (const ofJson* found = findNodeByExactFullPath(it.value(), targetPath)) {
+				return found;
+			}
+		}
+		return nullptr;
+	}
+
+	std::string normalizeLookup(std::string value) {
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+			if (c == ' ' || c == '-') return '_';
+			return static_cast<char>(std::tolower(c));
+		});
+		return value;
+	}
+
+	bool isMediaRootNode(const ofJson& node) {
+		auto fullPathIt = node.find("FULL_PATH");
+		if (fullPathIt == node.end() || !fullPathIt->is_string()) return false;
+		const std::string fullPath = fullPathIt->get<std::string>();
+		if (fullPath.rfind("/media/", 0) != 0) return false;
+		if (fullPath.find('/', std::string("/media/").size()) != std::string::npos) return false;
+		auto contentsIt = node.find("CONTENTS");
+		return contentsIt != node.end() && contentsIt->is_object();
+	}
+
+	bool lookupMatches(const std::string& lhs, const std::string& rhs) {
+		if (lhs.empty() || rhs.empty()) return false;
+		if (lhs == rhs) return true;
+		return lhs.find(rhs) != std::string::npos || rhs.find(lhs) != std::string::npos;
+	}
+
+	void collectStringLeaves(const ofJson& node, std::unordered_set<std::string>& outValues) {
+		if (node.is_string()) {
+			outValues.insert(normalizeLookup(node.get<std::string>()));
+			return;
+		}
+		if (node.is_array()) {
+			for (const auto& entry : node) collectStringLeaves(entry, outValues);
+			return;
+		}
+		if (node.is_object()) {
+			for (auto it = node.begin(); it != node.end(); ++it) collectStringLeaves(it.value(), outValues);
+		}
+	}
+
+	struct MediaCandidate {
+		const ofJson* node = nullptr;
+		std::string pageName;
+	};
+
+	std::string mediaPageNameFromNode(const std::string& fallbackName, const ofJson& mediaNode) {
+		auto contentsIt = mediaNode.find("CONTENTS");
+		if (contentsIt != mediaNode.end() && contentsIt->is_object()) {
+			auto nameIt = contentsIt->find("name");
+			if (nameIt != contentsIt->end() && nameIt->is_object()) {
+				auto valueIt = nameIt->find("VALUE");
+				if (valueIt != nameIt->end() && valueIt->is_array() && !valueIt->empty() && (*valueIt)[0].is_string()) {
+					return (*valueIt)[0].get<std::string>();
+				}
+			}
+		}
+		return fallbackName;
+	}
+
+	MediaCandidate findMediaCandidateByNameHint(const ofJson& root, const std::string& mediaName) {
+		MediaCandidate result;
+		const std::string normalizedMediaName = normalizeLookup(mediaName);
+		if (normalizedMediaName.empty()) return result;
+
+		std::function<bool(const ofJson&, const std::string&)> visitMediaNode = [&](const ofJson& node, const std::string& fallbackKey) {
+			if (isMediaRootNode(node)) {
+				std::unordered_set<std::string> candidates;
+				candidates.insert(normalizeLookup(fallbackKey));
+				auto fullPathIt = node.find("FULL_PATH");
+				if (fullPathIt != node.end() && fullPathIt->is_string()) {
+					candidates.insert(normalizeLookup(fullPathIt->get<std::string>()));
+				}
+				auto descIt = node.find("DESCRIPTION");
+				if (descIt != node.end() && descIt->is_string()) {
+					candidates.insert(normalizeLookup(descIt->get<std::string>()));
+				}
+				collectStringLeaves(node, candidates);
+
+				for (const auto& candidate : candidates) {
+					if (!lookupMatches(candidate, normalizedMediaName)) continue;
+					result.node = &node;
+					result.pageName = mediaPageNameFromNode(fallbackKey, node);
+					return true;
+				}
+			}
+
+			auto contentsIt = node.find("CONTENTS");
+			if (contentsIt == node.end() || !contentsIt->is_object()) return false;
+			for (auto it = contentsIt->begin(); it != contentsIt->end(); ++it) {
+				if (visitMediaNode(it.value(), it.key())) return true;
+			}
+			return false;
+		};
+
+		visitMediaNode(root, mediaName);
+		return result;
+	}
+
+	bool populateMediaSubpageFromParameterMap(
+		MadParameterPage& page,
+		std::map<std::string, MadParameter>& parameterMap,
+		const std::string& mediaName
+	) {
+		const std::string normalizedMediaName = normalizeLookup(mediaName);
+		if (normalizedMediaName.empty()) return false;
+
+		struct GroupMatch {
+			int score = 0;
+			std::vector<MadParameter*> parameters;
+		};
+		std::unordered_map<std::string, GroupMatch> groupedMatches;
+
+		for (auto& entry : parameterMap) {
+			const std::string& path = entry.second.getOscAddress();
+			if (path.rfind("/media/", 0) != 0) continue;
+
+			auto segments = ofSplitString(path, "/", true, true);
+			if (segments.size() < 2) continue;
+			const std::string groupKey = segments[1];
+			const std::string normalizedGroupKey = normalizeLookup(groupKey);
+			const std::string normalizedPath = normalizeLookup(path);
+			const std::string normalizedParamName = normalizeLookup(entry.second.getName());
+
+			int score = 0;
+			if (lookupMatches(normalizedGroupKey, normalizedMediaName)) score += 120;
+			if (lookupMatches(normalizedPath, normalizedMediaName)) score += 40;
+			if (lookupMatches(normalizedParamName, normalizedMediaName)) score += 20;
+			if (score == 0) continue;
+
+			auto& group = groupedMatches[groupKey];
+			group.score += score;
+			group.parameters.push_back(&entry.second);
+		}
+
+		GroupMatch* bestMatch = nullptr;
+		for (auto& groupedMatch : groupedMatches) {
+			if (!bestMatch || groupedMatch.second.score > bestMatch->score ||
+				(groupedMatch.second.score == bestMatch->score && groupedMatch.second.parameters.size() > bestMatch->parameters.size())) {
+				bestMatch = &groupedMatch.second;
+			}
+		}
+
+		if (!bestMatch) return false;
+		for (auto* parameter : bestMatch->parameters) {
+			page.addParameter(parameter);
+		}
+		return !page.isEmpty();
+	}
+
+	MediaCandidate findReferencedMediaCandidate(const ofJson& root, const ofJson& sourceNode) {
+		MediaCandidate result;
+		auto topIt = root.find("CONTENTS");
+		if (topIt == root.end() || !topIt->is_object()) return result;
+		auto mediaIt = topIt->find("media");
+		if (mediaIt == topIt->end() || !mediaIt->is_object()) return result;
+		auto mediaContentsIt = mediaIt->find("CONTENTS");
+		if (mediaContentsIt == mediaIt->end() || !mediaContentsIt->is_object()) return result;
+
+		std::unordered_set<std::string> sourceStrings;
+		collectStringLeaves(sourceNode, sourceStrings);
+
+		for (auto it = mediaContentsIt->begin(); it != mediaContentsIt->end(); ++it) {
+			const auto& mediaNode = it.value();
+			if (!mediaNode.is_object() || !isMediaRootNode(mediaNode)) continue;
+
+			std::vector<std::string> candidates;
+			candidates.push_back(normalizeLookup(it.key()));
+
+			auto descIt = mediaNode.find("DESCRIPTION");
+			if (descIt != mediaNode.end() && descIt->is_string()) {
+				candidates.push_back(normalizeLookup(descIt->get<std::string>()));
+			}
+
+			std::string pageName = mediaPageNameFromNode(it.key(), mediaNode);
+			candidates.push_back(normalizeLookup(pageName));
+
+			for (const auto& candidate : candidates) {
+				if (candidate.empty()) continue;
+				if (sourceStrings.count(candidate) > 0) {
+					result.node = &mediaNode;
+					result.pageName = pageName;
+					return result;
+				}
+			}
+		}
+
+		return result;
+	}
 }
 
 ofxMadOscQuery::ofxMadOscQuery() { }
@@ -74,7 +280,7 @@ void ofxMadOscQuery::updateValues() {
 //
 ////    getParameterList(json["CONTENTS"]["surfaces"]["CONTENTS"], {"selected"});
 //
-////    getParameterList(json["CONTENTS"]["medias"]["CONTENTS"], {"next", "per_type_selection", "previous", "select", "select_by_name", "selected"});
+////    getParameterList(json["CONTENTS"]["media"]["CONTENTS"], {"next", "per_type_selection", "previous", "select", "select_by_name", "selected"});
 //
 //    iterateContents(json["CONTENTS"]["surfaces"]);
 //    cout << parameterMap.size() << endl;
@@ -304,10 +510,19 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 	}
 
 	ofJson jsonSubpages = ofLoadJson("subpages.json");
+	bool hasRawExampleJson = false;
+	ofJson rawExampleJson;
+	if (ofFile::doesFileExist("rawExample.json")) {
+		rawExampleJson = ofLoadJson("rawExample.json");
+		hasRawExampleJson = !rawExampleJson.is_null();
+	}
 
 	for (auto & param : parameterMap) {
 		if (param.second.isMaster) {
 			std::string name = param.second.parentName;
+			std::string parentPath = param.second.getOscAddress();
+			auto slash = parentPath.find_last_of('/');
+			if (slash != std::string::npos) parentPath = parentPath.substr(0, slash);
 
 			MadParameterPage customSubpage = MadParameterPage(name, midiDevice, 13, true);
 			for (auto & element : jsonSubpages["opacity"]["elements"]) {
@@ -324,10 +539,37 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 
 			string newKey = "*/" + name + "/visual/name";
 			string mediaName;
-			getConnectedMediaName(&mediaName, madMapperJson, newKey, jsonSubpages["medias"]["skipKeys"]);
+			getConnectedMediaName(&mediaName, madMapperJson, newKey, jsonSubpages["media"]["skipKeys"]);
+
+			if (mediaName.empty()) {
+				if (const ofJson* sourceNode = resolveNodeByFullPath(madMapperJson, parentPath)) {
+					auto mediaCandidate = findReferencedMediaCandidate(madMapperJson, *sourceNode);
+					if (mediaCandidate.node && !mediaCandidate.pageName.empty()) {
+						mediaName = mediaCandidate.pageName;
+					}
+					if (mediaName.empty() && mediaCandidate.node) {
+						mediaName = mediaPageNameFromNode(name, *mediaCandidate.node);
+					}
+				}
+			}
+
+			if (mediaName.empty() && hasRawExampleJson) {
+				if (const ofJson* sourceNode = resolveNodeByFullPath(rawExampleJson, parentPath)) {
+					auto mediaCandidate = findReferencedMediaCandidate(rawExampleJson, *sourceNode);
+					if (mediaCandidate.node && !mediaCandidate.pageName.empty()) {
+						mediaName = mediaCandidate.pageName;
+					}
+					if (mediaName.empty() && mediaCandidate.node) {
+						mediaName = mediaPageNameFromNode(name, *mediaCandidate.node);
+					}
+				}
+			}
 
 			if (!mediaName.empty() && mediaName != "4x4.png") {
-				MadParameterPage customMediaSubpage = MadParameterPage(mediaName, midiDevice, 13, true);
+				const ofJson* mediaNode = nullptr;
+				std::string mediaPageName = mediaName;
+				bool mediaPageBuiltFromParameters = false;
+				bool mediaNodeFromRawExample = false;
 				std::vector<std::string> mediaNameVariants;
 				mediaNameVariants.push_back(mediaName);
 				std::string normalizedMediaName = mediaName;
@@ -335,19 +577,77 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 				if (normalizedMediaName != mediaName) mediaNameVariants.push_back(normalizedMediaName);
 
 				for (const auto& mediaNameVariant : mediaNameVariants) {
-					const ofJson* mediaNode = resolveNodeByFullPath(madMapperJson, "/medias/" + mediaNameVariant);
+					mediaNode = resolveNodeByFullPath(madMapperJson, "/media/" + mediaNameVariant);
+					if (!mediaNode) mediaNode = findNodeByExactFullPath(madMapperJson, "/media/" + mediaNameVariant);
+					if (mediaNode && !isMediaRootNode(*mediaNode)) mediaNode = nullptr;
 					if (!mediaNode) continue;
-					setupPageFromJson(subPages, customMediaSubpage, midiDevice, *mediaNode, "medias");
-					if (!customMediaSubpage.isEmpty()) break;
+					mediaPageName = mediaPageNameFromNode(mediaPageName, *mediaNode);
+					break;
+				}
+
+				if (!mediaNode) {
+					auto mediaCandidate = findMediaCandidateByNameHint(madMapperJson, mediaName);
+					if (mediaCandidate.node) {
+						mediaNode = mediaCandidate.node;
+						if (!mediaCandidate.pageName.empty()) mediaPageName = mediaCandidate.pageName;
+					}
+				}
+
+				if (!mediaNode) {
+					if (const ofJson* sourceNode = resolveNodeByFullPath(madMapperJson, parentPath)) {
+						auto mediaCandidate = findReferencedMediaCandidate(madMapperJson, *sourceNode);
+						if (mediaCandidate.node) {
+							mediaNode = mediaCandidate.node;
+							if (!mediaCandidate.pageName.empty()) mediaPageName = mediaCandidate.pageName;
+						}
+					}
+				}
+
+				if (!mediaNode && hasRawExampleJson) {
+					for (const auto& mediaNameVariant : mediaNameVariants) {
+						mediaNode = resolveNodeByFullPath(rawExampleJson, "/media/" + mediaNameVariant);
+						if (!mediaNode) mediaNode = findNodeByExactFullPath(rawExampleJson, "/media/" + mediaNameVariant);
+						if (mediaNode && !isMediaRootNode(*mediaNode)) mediaNode = nullptr;
+						if (!mediaNode) continue;
+						mediaPageName = mediaPageNameFromNode(mediaPageName, *mediaNode);
+						mediaNodeFromRawExample = true;
+						break;
+					}
+
+					if (!mediaNode) {
+						auto mediaCandidate = findMediaCandidateByNameHint(rawExampleJson, mediaName);
+						if (mediaCandidate.node) {
+							mediaNode = mediaCandidate.node;
+							if (!mediaCandidate.pageName.empty()) mediaPageName = mediaCandidate.pageName;
+							mediaNodeFromRawExample = true;
+						}
+					}
+				}
+
+				MadParameterPage customMediaSubpage = MadParameterPage(mediaPageName, midiDevice, 13, true);
+				if (mediaNode) {
+					auto chosenPathIt = mediaNode->find("FULL_PATH");
+					if (chosenPathIt != mediaNode->end() && chosenPathIt->is_string()) {
+						ofLogNotice("ofxMadOscQuery") << "Media node selected for '" << mediaName
+							<< "': " << chosenPathIt->get<std::string>();
+					}
+					setupPageFromJson(subPages, customMediaSubpage, midiDevice, *mediaNode, "media");
+				} else {
+					mediaPageBuiltFromParameters = populateMediaSubpageFromParameterMap(customMediaSubpage, parameterMap, mediaName);
 				}
 
 				if (!customMediaSubpage.isEmpty()) {
-					ofLogNotice("ofxMadOscQuery") << "Created media subpage '" << mediaName
-						<< "' with " << customMediaSubpage.getParameters()->size() << " parameters";
-					param.second.setConnectedMediaName(mediaName);
+					ofLogNotice("ofxMadOscQuery") << "Created media subpage '" << mediaPageName
+						<< "' with " << customMediaSubpage.getParameters()->size() << " parameters"
+						<< " (from parameter map=" << mediaPageBuiltFromParameters
+						<< ", rawExample=" << mediaNodeFromRawExample << ")";
+					param.second.setConnectedMediaName(mediaPageName);
 					subPages.push_back(customMediaSubpage);
 				} else {
-					ofLogNotice("ofxMadOscQuery") << "Media subpage for '" << mediaName << "' stayed empty";
+					ofLogNotice("ofxMadOscQuery") << "Media subpage for '" << mediaName << "' stayed empty"
+						<< " (fallback media node found=" << (mediaNode != nullptr)
+						<< ", parameter map fallback=" << mediaPageBuiltFromParameters
+						<< ", rawExample=" << mediaNodeFromRawExample << ")";
 				}
 			}
 		}
@@ -364,8 +664,8 @@ void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> & pages, ofxMi
 		for (auto & element : page["fixtures"]) {
 			addParameterToCustomPage(element, "fixtures", &customPage);
 		}
-		for (auto & element : page["medias"]) {
-			addParameterToCustomPage(element, "medias", &customPage);
+		for (auto & element : page["media"]) {
+			addParameterToCustomPage(element, "media", &customPage);
 		}
 		for (auto & element : page["modules"]) {
 			addParameterToCustomPage(element, "modules", &customPage);
@@ -433,7 +733,7 @@ void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> & pages, ofxMidi
 	auto itTop = json.find("CONTENTS");
 	if (itTop == json.end() || !itTop->is_object()) return;
 
-	auto keyTypes = { "surfaces", "medias", "fixtures" };
+	auto keyTypes = { "surfaces", "media", "fixtures" };
 	for (auto & keyType : keyTypes) {
 		auto itType = itTop->find(keyType);
 		if (itType == itTop->end() || !itType->is_object()) continue;
@@ -472,7 +772,10 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 	for (auto it = itCont->begin(); it != itCont->end(); ++it) {
 		const auto & contents = it.value();
 		auto itDesc = contents.find("DESCRIPTION");
-		if (itDesc == contents.end() || !itDesc->is_string()) continue;
+		std::string description;
+		if (itDesc != contents.end() && itDesc->is_string()) {
+			description = itDesc->get<std::string>();
+		}
 
 		auto skipDescriptions = { "Resolution", "Assign To Selected Surfaces", "Assign To All Surfaces", "Restart", "Select", "selected" };
 		for (auto & skipDescription : skipDescriptions) {
@@ -482,7 +785,34 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 			}
 		}
 
-		if (*itDesc == "Opacity") {
+		auto ctype = contents.find("TYPE");
+		if (keyType == "media") {
+			static const std::unordered_set<std::string> skipMediaDescriptions{
+				"Next",
+				"Per Type Selection",
+				"Previous",
+				"Select",
+				"Select By Name",
+				"Selected",
+				"Audio Level",
+				"Audio Pan",
+			};
+			if (!description.empty() && skipMediaDescriptions.count(description) > 0) {
+				continue;
+			}
+			if (ctype != contents.end() && ctype->is_string() && (*ctype == "f" || *ctype == "i")) {
+				page.addParameter(createParameter(contents));
+				continue;
+			}
+			if (contents.find("CONTENTS") != contents.end() && contents["CONTENTS"].is_object()) {
+				setupPageFromJson(pages, page, midiDevice, contents, keyType);
+			}
+			continue;
+		}
+
+		if (description.empty()) continue;
+
+		if (description == "Opacity") {
 			MadParameter * newOpacityParameter = createParameter(contents);
 			page.addParameter(newOpacityParameter);
 			bool bIsGroup = false;
@@ -503,7 +833,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 			string searchString = groupName + "/*/opacity";
 			auto customJson = ofJson::parse("{ \"pages\": [{\"name\": \"" + groupName + "_SubPage\", \"surfaces\": [\"" + searchString + "\"]}]}");
 			createCustomPage(pages, midiDevice, customJson);
-		} else if (*itDesc == "Color") {
+		} else if (description == "Color") {
 			auto colorCont = contents.find("CONTENTS");
 			if (colorCont != contents.end() && colorCont->is_object()) {
 				for (auto itColor = colorCont->begin(); itColor != colorCont->end(); ++itColor) {
@@ -516,7 +846,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 					}
 				}
 			}
-		} else if (*itDesc == "fx") {
+		} else if (description == "fx") {
 			auto fxCont = contents.find("CONTENTS");
 			if (fxCont != contents.end() && fxCont->is_object()) {
 				for (auto itFx = fxCont->begin(); itFx != fxCont->end(); ++itFx) {
@@ -526,11 +856,6 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 						page.addParameter(createParameter(itFx.value()));
 					}
 				}
-			}
-		} else {
-			auto ctype = contents.find("TYPE");
-			if (keyType == "medias" && ctype != contents.end() && ctype->is_string() && *ctype == "f") {
-				page.addParameter(createParameter(contents));
 			}
 		}
 	}
@@ -550,7 +875,7 @@ void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup & syncGroup) {
 	//        oscReceiver.getNextMessage(m);
 	//        ofLog() << "Received message on adress: " << m.getAddress() << endl;
 	//
-	//        if(m.getAddress() == "/medias/select_by_name"){
+	//        if(m.getAddress() == "/media/select_by_name"){
 	//            lastSelectedMedia = m.getArgAsString(0);
 	//            ofLog() << "Connected Media " << lastSelectedMedia << endl;
 	//
@@ -600,7 +925,6 @@ void ofxMadOscQuery::subscribeParameter(const std::string & path) {
 	msg["DATA"] = path;
 	if (wsClient->sendText(msg.dump())) {
 		subscribedPaths.insert(path);
-		ofLogNotice("ofxMadOscQuery") << "LISTEN " << path;
 	}
 }
 
@@ -676,7 +1000,12 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 	// even when the path is not part of parameterMap.
 	ofNotifyEvent(webSocketPathE, path, this);
 
-	auto it = parameterMap.find(path);
+	std::string lookupPath = path;
+	if (lookupPath.rfind("/medias/", 0) == 0) {
+		lookupPath = "/media/" + lookupPath.substr(std::string("/medias/").size());
+	}
+
+	auto it = parameterMap.find(lookupPath);
 	if (it == parameterMap.end()) {
 		return;
 	}
@@ -692,7 +1021,7 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 	}
 
 	if (!gotVal) {
-		ofLogWarning("ofxMadOscQuery") << "WS message missing VALUE/ARGS for " << path;
+		ofLogWarning("ofxMadOscQuery") << "WS message missing VALUE/ARGS for " << lookupPath;
 		return;
 	}
 

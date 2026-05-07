@@ -37,7 +37,6 @@ MadParameterPage::MadParameterPage(std::string name, ofxMidiDevice *midiDevice, 
 	, name(std::move(name))
 	, midiDevice(midiDevice)
 {
-	ofLog() << "Constructor for " << this->name << " called!" << endl;
 	linkedParamGroup.setName("Page");
 }
 
@@ -56,10 +55,18 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 		const std::string controlLabel = controlLabelForSlot(midiDevice, i);
 		if (parameter != parameters.end())
 		{
-			if ((*parameter)->updateFromMidi)
+			if ((*parameter)->updateFromMidi) {
+				parameter++;
 				continue;
+			}
 			if (!controlLabel.empty()) {
-				midiDevice->midiComponents[controlLabel].value.set((*parameter)->get());
+				auto& control = midiDevice->midiComponents[controlLabel];
+				float target = (*parameter)->get();
+				if (std::fabs(control.value.get() - target) > 1e-6f) {
+					control.value.disableEvents();
+					control.value.set(target);
+					control.value.enableEvents();
+				}
 			}
 
 			parameter++;
@@ -67,7 +74,12 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 		else
 		{
 			if (!controlLabel.empty()) {
-				midiDevice->midiComponents[controlLabel].value.set(0);
+				auto& control = midiDevice->midiComponents[controlLabel];
+				if (std::fabs(control.value.get()) > 1e-6f) {
+					control.value.disableEvents();
+					control.value.set(0.f);
+					control.value.enableEvents();
+				}
 			}
 		}
 	}
