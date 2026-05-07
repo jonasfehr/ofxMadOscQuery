@@ -58,7 +58,7 @@ public:
 	void iterateFind(ofJson & jsonReturn, const ofJson & json, const string & key, const ofJson & jsonSkipKeys);
 
 	void createSubPages(std::list<MadParameterPage> & page, ofxMidiDevice * midiDevice, const ofJson & json);
-	void setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & json, const string & keyType);
+	void setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & json, const string & keyType, const ofJson * skipKeys = nullptr);
 
 	void createCustomPage(std::list<MadParameterPage> & pages, ofxMidiDevice * midiDevice, const ofJson & json);
 	void createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson);

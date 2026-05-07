@@ -73,6 +73,17 @@ namespace {
 		}
 	}
 
+	std::unordered_set<std::string> normalizedSkipSet(const ofJson* skipKeys) {
+		std::unordered_set<std::string> normalized;
+		if (!skipKeys || !skipKeys->is_array()) return normalized;
+		for (const auto& skipKey : *skipKeys) {
+			if (skipKey.is_string()) {
+				normalized.insert(normalizeLookup(skipKey.get<std::string>()));
+			}
+		}
+		return normalized;
+	}
+
 	struct MediaCandidate {
 		const ofJson* node = nullptr;
 		std::string pageName;
@@ -510,6 +521,14 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 	}
 
 	ofJson jsonSubpages = ofLoadJson("subpages.json");
+	const ofJson* mediaSkipKeys = nullptr;
+	static bool warnedMissingMediaSkipKeysInCustomPages = false;
+	if (jsonSubpages.contains("media") && jsonSubpages["media"].contains("skipKeys") && jsonSubpages["media"]["skipKeys"].is_array()) {
+		mediaSkipKeys = &jsonSubpages["media"]["skipKeys"];
+	} else if (!warnedMissingMediaSkipKeysInCustomPages) {
+		ofLogWarning("ofxMadOscQuery") << "subpages.json: missing or invalid media.skipKeys array; media filtering will not skip configured keys";
+		warnedMissingMediaSkipKeysInCustomPages = true;
+	}
 	bool hasRawExampleJson = false;
 	ofJson rawExampleJson;
 	if (ofFile::doesFileExist("rawExample.json")) {
@@ -631,7 +650,7 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 						ofLogNotice("ofxMadOscQuery") << "Media node selected for '" << mediaName
 							<< "': " << chosenPathIt->get<std::string>();
 					}
-					setupPageFromJson(subPages, customMediaSubpage, midiDevice, *mediaNode, "media");
+					setupPageFromJson(subPages, customMediaSubpage, midiDevice, *mediaNode, "media", mediaSkipKeys);
 				} else {
 					mediaPageBuiltFromParameters = populateMediaSubpageFromParameterMap(customMediaSubpage, parameterMap, mediaName);
 				}
@@ -733,7 +752,17 @@ void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> & pages, ofxMidi
 	auto itTop = json.find("CONTENTS");
 	if (itTop == json.end() || !itTop->is_object()) return;
 
-	auto keyTypes = { "surfaces", "media", "fixtures" };
+	ofJson jsonSubpages = ofLoadJson("subpages.json");
+	const ofJson* mediaSkipKeys = nullptr;
+	static bool warnedMissingMediaSkipKeysInCreateSubPages = false;
+	if (jsonSubpages.contains("media") && jsonSubpages["media"].contains("skipKeys") && jsonSubpages["media"]["skipKeys"].is_array()) {
+		mediaSkipKeys = &jsonSubpages["media"]["skipKeys"];
+	} else if (!warnedMissingMediaSkipKeysInCreateSubPages) {
+		ofLogWarning("ofxMadOscQuery") << "subpages.json: missing or invalid media.skipKeys array; media filtering will not skip configured keys";
+		warnedMissingMediaSkipKeysInCreateSubPages = true;
+	}
+
+	const std::initializer_list<std::string> keyTypes{ "surfaces", "media", "fixtures" };
 	for (auto & keyType : keyTypes) {
 		auto itType = itTop->find(keyType);
 		if (itType == itTop->end() || !itType->is_object()) continue;
@@ -755,9 +784,11 @@ void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> & pages, ofxMidi
 			}
 			if (shouldSkip) continue;
 
+			const std::string currentKeyType = keyType;
 			auto keyword = itDesc->get<std::string>();
 			MadParameterPage page = MadParameterPage(keyword, midiDevice, true);
-			setupPageFromJson(pages, page, midiDevice, element, keyType);
+			const ofJson* pageSkipKeys = (currentKeyType == "media") ? mediaSkipKeys : nullptr;
+			setupPageFromJson(pages, page, midiDevice, element, currentKeyType, pageSkipKeys);
 			if (!page.isEmpty()) {
 				pages.push_back(page);
 			}
@@ -765,17 +796,20 @@ void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> & pages, ofxMidi
 	}
 }
 
-void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & element, const string & keyType) {
+void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & element, const string & keyType, const ofJson * skipKeys) {
 	auto itCont = element.find("CONTENTS");
 	if (itCont == element.end() || !itCont->is_object()) return;
+	const auto skipSet = normalizedSkipSet(skipKeys);
 
 	for (auto it = itCont->begin(); it != itCont->end(); ++it) {
 		const auto & contents = it.value();
+		const std::string normalizedEntryKey = normalizeLookup(it.key());
 		auto itDesc = contents.find("DESCRIPTION");
 		std::string description;
 		if (itDesc != contents.end() && itDesc->is_string()) {
 			description = itDesc->get<std::string>();
 		}
+		const std::string normalizedDescription = normalizeLookup(description);
 
 		auto skipDescriptions = { "Resolution", "Assign To Selected Surfaces", "Assign To All Surfaces", "Restart", "Select", "selected" };
 		for (auto & skipDescription : skipDescriptions) {
@@ -787,17 +821,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 
 		auto ctype = contents.find("TYPE");
 		if (keyType == "media") {
-			static const std::unordered_set<std::string> skipMediaDescriptions{
-				"Next",
-				"Per Type Selection",
-				"Previous",
-				"Select",
-				"Select By Name",
-				"Selected",
-				"Audio Level",
-				"Audio Pan",
-			};
-			if (!description.empty() && skipMediaDescriptions.count(description) > 0) {
+			if (!skipSet.empty() && (skipSet.count(normalizedDescription) > 0 || skipSet.count(normalizedEntryKey) > 0)) {
 				continue;
 			}
 			if (ctype != contents.end() && ctype->is_string() && (*ctype == "f" || *ctype == "i")) {
@@ -805,7 +829,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 				continue;
 			}
 			if (contents.find("CONTENTS") != contents.end() && contents["CONTENTS"].is_object()) {
-				setupPageFromJson(pages, page, midiDevice, contents, keyType);
+				setupPageFromJson(pages, page, midiDevice, contents, keyType, skipKeys);
 			}
 			continue;
 		}
@@ -828,7 +852,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 			MadParameterPage subPage = MadParameterPage(groupName, midiDevice, true);
 			auto subContIt = contents.find("CONTENTS");
 			if (subContIt != contents.end() && subContIt->is_object()) {
-				setupPageFromJson(pages, subPage, midiDevice, *subContIt, keyType);
+				setupPageFromJson(pages, subPage, midiDevice, *subContIt, keyType, skipKeys);
 			}
 			string searchString = groupName + "/*/opacity";
 			auto customJson = ofJson::parse("{ \"pages\": [{\"name\": \"" + groupName + "_SubPage\", \"surfaces\": [\"" + searchString + "\"]}]}");
