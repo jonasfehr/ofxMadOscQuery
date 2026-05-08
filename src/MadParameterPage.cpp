@@ -66,6 +66,7 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 					control.value.disableEvents();
 					control.value.set(target);
 					control.value.enableEvents();
+					control.update();
 				}
 			}
 
@@ -79,6 +80,7 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 					control.value.disableEvents();
 					control.value.set(0.f);
 					control.value.enableEvents();
+					control.update();
 				}
 			}
 		}
