@@ -84,6 +84,13 @@ namespace {
 		return normalized;
 	}
 
+	bool isBindableNumericType(const ofJson& node) {
+		auto itType = node.find("TYPE");
+		if (itType == node.end() || !itType->is_string()) return false;
+		const std::string type = itType->get<std::string>();
+		return type == "f" || type == "d" || type == "i" || type == "h";
+	}
+
 	struct MediaCandidate {
 		const ofJson* node = nullptr;
 		std::string pageName;
@@ -334,8 +341,7 @@ void ofxMadOscQuery::iterateFind(ofJson & jsonReturn, const ofJson & json, const
 		}
 	}
 
-	auto itType = json.find("TYPE");
-	if (itType != json.end() && itType->is_string() && (*itType == "f") && isKeyCompatible) {
+	if (isBindableNumericType(json) && isKeyCompatible) {
 		jsonReturn = json;
 		return;
 	}
@@ -350,65 +356,75 @@ void ofxMadOscQuery::iterateFind(ofJson & jsonReturn, const ofJson & json, const
 }
 
 void ofxMadOscQuery::iterateFind(const ofJson & json, const string & key, MadParameterPage * customPage, const ofJson & jsonSkipKeys) {
-	auto itFull = json.find("FULL_PATH");
-	if (itFull == json.end() || !itFull->is_string()) return;
-	string path = itFull->get<std::string>();
-	vector<string> pathSeg = ofSplitString(path, "/");
-	vector<string> keySeg = ofSplitString(key, "/");
+	auto pathMatches = [&](const std::string& path) {
+		vector<string> pathSeg = ofSplitString(path, "/");
+		vector<string> keySeg = ofSplitString(key, "/");
 
-	bool isKeyCompatible = true;
-	int j = 0;
-	int i = 0;
-	while (j < (int)keySeg.size() && i < (int)pathSeg.size()) {
-		if (keySeg[j] == pathSeg[i]) {
-			j++;
-			i++;
-		} else if (keySeg[j] == "*") {
-			for (auto & skipKey : jsonSkipKeys) {
-				for (int n = j; n <= i; n++) {
-					if (pathSeg[n] == skipKey.get<std::string>()) {
-						isKeyCompatible = false;
-					}
-				}
-			}
-
-			if ((int)keySeg.size() - 1 != j) {
-				std::size_t foundPos = path.find("/" + keySeg[j + 1]);
-				if (foundPos != std::string::npos) {
-					int endPos = (int)foundPos + (int)keySeg[j + 1].size() + 1;
-					if ((endPos == (int)path.size()) || path[endPos] == '/') {
-						while (i < (int)pathSeg.size() && pathSeg[i] != keySeg[j + 1]) {
-							i++;
+		bool isKeyCompatible = true;
+		int j = 0;
+		int i = 0;
+		while (j < (int)keySeg.size() && i < (int)pathSeg.size()) {
+			if (keySeg[j] == pathSeg[i]) {
+				j++;
+				i++;
+			} else if (keySeg[j] == "*") {
+				for (auto & skipKey : jsonSkipKeys) {
+					if (!skipKey.is_string()) continue;
+					for (int n = j; n <= i && n < (int)pathSeg.size(); n++) {
+						if (pathSeg[n] == skipKey.get<std::string>()) {
+							isKeyCompatible = false;
 						}
-						if (i == j) isKeyCompatible = false;
-					} else {
-						isKeyCompatible = false;
 					}
 				}
-			} else {
-				if ((int)pathSeg.size() == (int)keySeg.size() && isKeyCompatible) {
-					j = (int)keySeg.size();
+
+				if ((int)keySeg.size() - 1 != j) {
+					std::size_t foundPos = path.find("/" + keySeg[j + 1]);
+					if (foundPos != std::string::npos) {
+						int endPos = (int)foundPos + (int)keySeg[j + 1].size() + 1;
+						if ((endPos == (int)path.size()) || path[endPos] == '/') {
+							while (i < (int)pathSeg.size() && pathSeg[i] != keySeg[j + 1]) {
+								i++;
+							}
+							if (i == j) isKeyCompatible = false;
+						} else {
+							isKeyCompatible = false;
+						}
+					}
+				} else {
+					if ((int)pathSeg.size() == (int)keySeg.size() && isKeyCompatible) {
+						j = (int)keySeg.size();
+					}
 				}
-			}
-			j++;
-		} else {
-			isKeyCompatible = false;
-			break;
-		}
-	}
-
-	auto itType = json.find("TYPE");
-	if (itType != json.end() && itType->is_string() && (*itType == "f") && isKeyCompatible) {
-		(*customPage).addParameter(createParameter(json));
-	}
-
-	for (auto it = json.begin(); it != json.end(); ++it) {
-		if (it.key() == "CONTENTS") {
-			for (auto it2 = it.value().begin(); it2 != it.value().end(); ++it2) {
-				iterateFind(it2.value(), key, customPage, jsonSkipKeys);
+				j++;
+			} else {
+				isKeyCompatible = false;
+				break;
 			}
 		}
-	}
+		return isKeyCompatible;
+	};
+
+	std::function<void(const ofJson&, const std::string&)> walk;
+	walk = [&](const ofJson& node, const std::string& fallbackPath) {
+		std::string effectivePath = fallbackPath;
+		auto itFull = node.find("FULL_PATH");
+		if (itFull != node.end() && itFull->is_string()) {
+			effectivePath = itFull->get<std::string>();
+		}
+
+		if (isBindableNumericType(node) && !effectivePath.empty() && pathMatches(effectivePath)) {
+			(*customPage).addParameter(createParameter(node));
+		}
+
+		auto contentsIt = node.find("CONTENTS");
+		if (contentsIt == node.end() || !contentsIt->is_object()) return;
+		for (auto it = contentsIt->begin(); it != contentsIt->end(); ++it) {
+			const std::string childPath = effectivePath.empty() ? ("/" + it.key()) : (effectivePath + "/" + it.key());
+			walk(it.value(), childPath);
+		}
+	};
+
+	walk(json, "");
 }
 
 map<string, ofJson> ofxMadOscQuery::getContentMap(const ofJson & json, const string & key, const vector<string> & skipKeys) {
@@ -510,12 +526,16 @@ void ofxMadOscQuery::getConnectedMediaName(string * mediaName, const ofJson & js
 	}
 }
 
-void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson) {
+void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson, size_t serverId) {
 	for (auto & page : jsonPages["pages"]) {
+		// Only build pages belonging to this server
+		size_t pageServerId = page.value("serverId", (size_t)0);
+		if (pageServerId != serverId) continue;
+
 		std::string name = page["name"];
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
 		for (auto & element : page["elements"]) {
-			iterateFind(madMapperJson, element, &customPage, page["skipKeys"]);
+			iterateFind(madMapperJson, element, &customPage, page.value("skipKeys", ofJson::array()));
 		}
 		pages.push_back(customPage);
 	}
@@ -819,12 +839,11 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 			}
 		}
 
-		auto ctype = contents.find("TYPE");
 		if (keyType == "media") {
 			if (!skipSet.empty() && (skipSet.count(normalizedDescription) > 0 || skipSet.count(normalizedEntryKey) > 0)) {
 				continue;
 			}
-			if (ctype != contents.end() && ctype->is_string() && (*ctype == "f" || *ctype == "i")) {
+			if (isBindableNumericType(contents)) {
 				page.addParameter(createParameter(contents));
 				continue;
 			}
@@ -876,7 +895,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 				for (auto itFx = fxCont->begin(); itFx != fxCont->end(); ++itFx) {
 					auto fdesc = itFx.value().find("DESCRIPTION");
 					auto ftype = itFx.value().find("TYPE");
-					if (fdesc != itFx.value().end() && ftype != itFx.value().end() && fdesc->is_string() && ftype->is_string() && *fdesc != "FX Type" && *ftype == "f") {
+					if (fdesc != itFx.value().end() && ftype != itFx.value().end() && fdesc->is_string() && ftype->is_string() && *fdesc != "FX Type" && isBindableNumericType(itFx.value())) {
 						page.addParameter(createParameter(itFx.value()));
 					}
 				}
@@ -1012,8 +1031,11 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 
 	std::string path;
 	if (json.contains("PATH") && json["PATH"].is_string()) path = json["PATH"].get<std::string>();
+	else if (json.contains("path") && json["path"].is_string()) path = json["path"].get<std::string>();
 	else if (json.contains("NAME") && json["NAME"].is_string()) path = json["NAME"].get<std::string>();
+	else if (json.contains("name") && json["name"].is_string()) path = json["name"].get<std::string>();
 	else if (json.contains("FULL_PATH") && json["FULL_PATH"].is_string()) path = json["FULL_PATH"].get<std::string>();
+	else if (json.contains("full_path") && json["full_path"].is_string()) path = json["full_path"].get<std::string>();
 
 	if (path.empty()) {
 		ofLogWarning("ofxMadOscQuery") << "WS message missing PATH/NAME/FULL_PATH";
@@ -1025,6 +1047,9 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 	ofNotifyEvent(webSocketPathE, path, this);
 
 	std::string lookupPath = path;
+	if (!lookupPath.empty() && lookupPath.front() != '/') {
+		lookupPath = "/" + lookupPath;
+	}
 	if (lookupPath.rfind("/medias/", 0) == 0) {
 		lookupPath = "/media/" + lookupPath.substr(std::string("/medias/").size());
 	}
@@ -1036,11 +1061,49 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 
 	float value = 0.f;
 	bool gotVal = false;
-	if (json.contains("VALUE") && json["VALUE"].is_array() && !json["VALUE"].empty()) {
-		value = json["VALUE"].at(0).get<float>();
+	std::function<bool(const ofJson&, float&)> extractNumeric;
+	extractNumeric = [&](const ofJson& node, float& out) -> bool {
+		if (node.is_number_float()) {
+			out = node.get<float>();
+			return true;
+		}
+		if (node.is_number_integer()) {
+			out = static_cast<float>(node.get<int>());
+			return true;
+		}
+		if (node.is_array() && !node.empty()) {
+			const auto& first = node.at(0);
+			if (first.is_number_float()) {
+				out = first.get<float>();
+				return true;
+			}
+			if (first.is_number_integer()) {
+				out = static_cast<float>(first.get<int>());
+				return true;
+			}
+			if (first.is_object()) {
+				auto vIt = first.find("value");
+				if (vIt != first.end()) return extractNumeric(*vIt, out);
+				vIt = first.find("VALUE");
+				if (vIt != first.end()) return extractNumeric(*vIt, out);
+			}
+		}
+		if (node.is_object()) {
+			auto vIt = node.find("value");
+			if (vIt != node.end() && extractNumeric(*vIt, out)) return true;
+			vIt = node.find("VALUE");
+			if (vIt != node.end() && extractNumeric(*vIt, out)) return true;
+		}
+		return false;
+	};
+
+	if (json.contains("VALUE") && extractNumeric(json["VALUE"], value)) {
 		gotVal = true;
-	} else if (json.contains("ARGS") && json["ARGS"].is_array() && !json["ARGS"].empty()) {
-		value = json["ARGS"].at(0).get<float>();
+	} else if (json.contains("value") && extractNumeric(json["value"], value)) {
+		gotVal = true;
+	} else if (json.contains("ARGS") && extractNumeric(json["ARGS"], value)) {
+		gotVal = true;
+	} else if (json.contains("args") && extractNumeric(json["args"], value)) {
 		gotVal = true;
 	}
 

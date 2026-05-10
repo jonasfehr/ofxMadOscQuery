@@ -61,7 +61,7 @@ public:
 	void setupPageFromJson(std::list<MadParameterPage> & pages, MadParameterPage & page, ofxMidiDevice * midiDevice, const ofJson & json, const string & keyType, const ofJson * skipKeys = nullptr);
 
 	void createCustomPage(std::list<MadParameterPage> & pages, ofxMidiDevice * midiDevice, const ofJson & json);
-	void createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson);
+	void createCustomPages(ofxMidiDevice * midiDevice, const ofJson & jsonPages, const ofJson & madMapperJson, size_t serverId = 0);
 	std::string getStatusString();
 	bool matchesGroupWildcard(const std::string & paramName, const std::string & elementName);
 	void getConnectedMediaName(string * mediaName, const ofJson & json, const string & key, const ofJson & jsonSkipKeys);

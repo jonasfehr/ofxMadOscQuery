@@ -85,7 +85,7 @@ void OscQueryWebSocketClient::listen() {
 			if (op == WebSocket::FRAME_OP_TEXT) {
 				if (onMessage) onMessage(std::string(buffer, buffer + n));
 			} else if (op == WebSocket::FRAME_OP_BINARY) {
-				// Parse OSC packet: always forward address, optionally include first float arg.
+				// Parse OSC packet: always forward address, optionally include first numeric arg.
 				const char* data = buffer;
 				const char* end = buffer + n;
 				const char* addrEnd = (const char*)memchr(data, '\0', end - data);
@@ -104,12 +104,29 @@ void OscQueryWebSocketClient::listen() {
 
 				float fval = 0.f;
 				bool gotVal = false;
-				if (typeTag.size() >= 2 && typeTag[0] == ',' && typeTag[1] == 'f' && (p + 4) <= end) {
-					uint32_t be = 0;
-					std::memcpy(&be, p, 4);
-					be = Poco::ByteOrder::fromBigEndian(be);
-					std::memcpy(&fval, &be, 4);
-					gotVal = true;
+				if (typeTag.size() >= 2 && typeTag[0] == ',') {
+					const char argType = typeTag[1];
+					if (argType == 'f' && (p + 4) <= end) {
+						uint32_t be = 0;
+						std::memcpy(&be, p, 4);
+						be = Poco::ByteOrder::fromBigEndian(be);
+						std::memcpy(&fval, &be, 4);
+						gotVal = true;
+					} else if (argType == 'i' && (p + 4) <= end) {
+						int32_t be = 0;
+						std::memcpy(&be, p, 4);
+						be = Poco::ByteOrder::fromBigEndian(be);
+						fval = static_cast<float>(be);
+						gotVal = true;
+					} else if (argType == 'd' && (p + 8) <= end) {
+						uint64_t be = 0;
+						std::memcpy(&be, p, 8);
+						be = Poco::ByteOrder::fromBigEndian(be);
+						double dval = 0.0;
+						std::memcpy(&dval, &be, 8);
+						fval = static_cast<float>(dval);
+						gotVal = true;
+					}
 				}
 
 				if (onMessage) {
