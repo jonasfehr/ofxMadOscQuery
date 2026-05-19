@@ -269,12 +269,17 @@ ofJson ofxMadOscQuery::receive() {
 		ofLogWarning("ofxMadOscQuery") << "MadMapper not open or OSCQuery endpoint unreachable: " << receiveAddress;
 		return nullptr;
 	}
-	ofJson response;
-	std::stringstream ssJSON;
-	ssJSON << resp.data;
-	ssJSON >> response;
-	this->madMapperJson = response;
-	return response;
+	try {
+		ofJson response;
+		std::stringstream ssJSON;
+		ssJSON << resp.data;
+		ssJSON >> response;
+		this->madMapperJson = response;
+		return response;
+	} catch (const std::exception& e) {
+		ofLogError("ofxMadOscQuery") << "Failed to parse OSCQuery response from " << receiveAddress << ": " << e.what();
+		return madMapperJson.is_null() ? ofJson(nullptr) : madMapperJson;
+	}
 }
 
 void ofxMadOscQuery::updateValues() {
