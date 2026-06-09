@@ -569,15 +569,12 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 			if (slash != std::string::npos) parentPath = parentPath.substr(0, slash);
 
 			MadParameterPage customSubpage = MadParameterPage(name, midiDevice, 13, true);
-			for (auto & element : jsonSubpages["opacity"]["elements"]) {
-				string newKey = "*/" + name + element.get<std::string>();
-				iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["opacity"]["skipKeys"]);
-			}
-			subPages.push_back(customSubpage);
-
-			for (auto & element : jsonSubpages["luminosity"]["elements"]) {
-				string newKey = "*/" + name + element.get<std::string>();
-				iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages["luminosity"]["skipKeys"]);
+			const std::string section = param.second.isFixtureParameter ? "luminosity" : "opacity";
+			if (jsonSubpages.contains(section)) {
+				for (auto & element : jsonSubpages[section]["elements"]) {
+					string newKey = "*/" + name + element.get<std::string>();
+					iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages[section]["skipKeys"]);
+				}
 			}
 			subPages.push_back(customSubpage);
 
@@ -787,7 +784,7 @@ void ofxMadOscQuery::createSubPages(std::list<MadParameterPage> & pages, ofxMidi
 		warnedMissingMediaSkipKeysInCreateSubPages = true;
 	}
 
-	const std::initializer_list<std::string> keyTypes{ "surfaces", "media", "fixtures" };
+	const std::initializer_list<std::string> keyTypes{ "surfaces", "laser_surfaces", "media", "fixtures" };
 	for (auto & keyType : keyTypes) {
 		auto itType = itTop->find(keyType);
 		if (itType == itTop->end() || !itType->is_object()) continue;
@@ -1059,11 +1056,6 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 		lookupPath = "/media/" + lookupPath.substr(std::string("/medias/").size());
 	}
 
-	auto it = parameterMap.find(lookupPath);
-	if (it == parameterMap.end()) {
-		return;
-	}
-
 	float value = 0.f;
 	bool gotVal = false;
 	std::function<bool(const ofJson&, float&)> extractNumeric;
@@ -1119,6 +1111,8 @@ void ofxMadOscQuery::handleWebSocketMessage(const std::string & msg) {
 
 	{
 		std::lock_guard<std::mutex> lock(paramMutex);
+		auto it = parameterMap.find(lookupPath);
+		if (it == parameterMap.end()) return;
 		float current = it->second.get();
 		if (std::fabs(current - value) < 1e-6f) return; // avoid echo loop
 		it->second.setFromRemoteRaw(value);

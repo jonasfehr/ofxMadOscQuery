@@ -21,7 +21,6 @@
 #include <thread>
 #include <unordered_set>
 
-#define DEBUG true
 
 class ofxMadOscQuery {
 public:
