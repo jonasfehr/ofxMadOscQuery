@@ -89,6 +89,7 @@ void MadParameterPage::setValuesOnDevice(ofAbstractParameter &p)
 
 void MadParameterPage::addParameter(MadParameter *parameter)
 {
+	if (!parameter) return;
 	std::string paramName = parameter->getParameterName();
 	if (this->name != "opacity")
 	{

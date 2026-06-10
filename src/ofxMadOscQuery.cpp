@@ -860,6 +860,7 @@ void ofxMadOscQuery::setupPageFromJson(std::list<MadParameterPage> & pages, MadP
 		if (description == "Opacity") {
 			MadParameter * newOpacityParameter = createParameter(contents);
 			page.addParameter(newOpacityParameter);
+			if (!newOpacityParameter) return;
 			bool bIsGroup = false;
 			if (keyType == "surfaces" && element["CONTENTS"].find("output") == element["CONTENTS"].end()) {
 				bIsGroup = true;
@@ -931,7 +932,14 @@ void ofxMadOscQuery::oscReceiveMessages(ofParameterGroup & syncGroup) {
 
 //--------------------------------------------------------------
 MadParameter * ofxMadOscQuery::createParameter(ofJson parameterValues) {
-	std::string key = parameterValues["FULL_PATH"];
+	auto fpIt = parameterValues.find("FULL_PATH");
+	if (fpIt == parameterValues.end() || !fpIt->is_string()) {
+		ofLogError("ofxMadOscQuery") << "createParameter: FULL_PATH missing or not a string"
+		                             << " (type=" << (fpIt == parameterValues.end() ? "missing" : fpIt->type_name()) << ")"
+		                             << " — skipping node";
+		return nullptr;
+	}
+	std::string key = fpIt->get<std::string>();
 	parameterMap[key] = MadParameter(parameterValues);
 	auto val = &parameterMap.operator[](key);
 	ofAddListener(val->oscSendEvent, this, &ofxMadOscQuery::oscSendToMadMapper);

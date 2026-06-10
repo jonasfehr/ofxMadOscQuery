@@ -31,10 +31,13 @@ public:
 //    };
 	
 	MadParameter(ofJson parameterValues, bool doSendOsc = true){
-		this->setOscAddress(parameterValues["FULL_PATH"].get<std::string>());
-		this->setName(parameterValues["DESCRIPTION"].get<std::string>());
-		if(!parameterValues["TYPE"].is_null()){
-			parameterType = parameterValues["TYPE"].get<std::string>();
+		auto fpIt = parameterValues.find("FULL_PATH");
+		this->setOscAddress((fpIt != parameterValues.end() && fpIt->is_string()) ? fpIt->get<std::string>() : "");
+		auto descIt = parameterValues.find("DESCRIPTION");
+		this->setName((descIt != parameterValues.end() && descIt->is_string()) ? descIt->get<std::string>() : "");
+		auto typeIt = parameterValues.find("TYPE");
+		if(typeIt != parameterValues.end() && typeIt->is_string()){
+			parameterType = typeIt->get<std::string>();
 		}
 		if(!parameterValues["RANGE"].is_null() ){
 			range.min = parameterValues["RANGE"].at(0)["MIN"].get<float>();
