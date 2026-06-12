@@ -337,7 +337,7 @@ void ofxMadOscQuery::iterateFind(ofJson & jsonReturn, const ofJson & json, const
 		if (keySeg[i] == pathSeg[i]) {
 		} else if (keySeg[i] == "*") {
 			for (auto & skipKey : jsonSkipKeys) {
-				if (pathSeg[i] == skipKey.get<std::string>()) {
+				if (skipKey.is_string() && pathSeg[i] == skipKey.get<std::string>()) {
 					isKeyCompatible = false;
 				}
 			}
@@ -501,6 +501,7 @@ void ofxMadOscQuery::getConnectedMediaName(string * mediaName, const ofJson & js
 			}
 
 			for (auto & skipKey : jsonSkipKeys) {
+				if (!skipKey.is_string()) continue;
 				for (int n = j; n < i; n++) {
 					if (pathSeg[n] == skipKey.get<std::string>()) {
 						isKeyCompatible = false;
@@ -537,10 +538,15 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 		size_t pageServerId = page.value("serverId", (size_t)0);
 		if (pageServerId != serverId) continue;
 
-		std::string name = page["name"];
+		if (!page.contains("name") || !page["name"].is_string()) continue;
+		std::string name = page["name"].get<std::string>();
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
 		for (auto & element : page["elements"]) {
-			iterateFind(madMapperJson, element, &customPage, page.value("skipKeys", ofJson::array()));
+			std::string elementPath;
+			if (element.is_string()) elementPath = element.get<std::string>();
+			else if (element.is_object() && element.contains("path") && element["path"].is_string()) elementPath = element["path"].get<std::string>();
+			else continue;
+			iterateFind(madMapperJson, elementPath, &customPage, page.value("skipKeys", ofJson::array()));
 		}
 		pages.push_back(customPage);
 	}
@@ -572,6 +578,7 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 			const std::string section = param.second.isFixtureParameter ? "luminosity" : "opacity";
 			if (jsonSubpages.contains(section)) {
 				for (auto & element : jsonSubpages[section]["elements"]) {
+					if (!element.is_string()) continue;
 					string newKey = "*/" + name + element.get<std::string>();
 					iterateFind(madMapperJson, newKey, &customSubpage, jsonSubpages[section]["skipKeys"]);
 				}
