@@ -703,20 +703,17 @@ void ofxMadOscQuery::createCustomPages(ofxMidiDevice * midiDevice, const ofJson 
 }
 
 void ofxMadOscQuery::createCustomPage(std::list<MadParameterPage> & pages, ofxMidiDevice * midiDevice, const ofJson & json) {
-	for (auto & page : json["pages"]) {
-		std::string name = page["name"];
+	if (!json.is_object() || !json.contains("pages") || !json["pages"].is_array()) return;
+	for (const auto & page : json["pages"]) {
+		if (!page.is_object()) continue;
+		if (!page.contains("name") || !page["name"].is_string()) continue;
+		std::string name = page["name"].get<std::string>();
 		MadParameterPage customPage = MadParameterPage(name, midiDevice);
-		for (auto & element : page["surfaces"]) {
-			addParameterToCustomPage(element, "surfaces", &customPage);
-		}
-		for (auto & element : page["fixtures"]) {
-			addParameterToCustomPage(element, "fixtures", &customPage);
-		}
-		for (auto & element : page["media"]) {
-			addParameterToCustomPage(element, "media", &customPage);
-		}
-		for (auto & element : page["modules"]) {
-			addParameterToCustomPage(element, "modules", &customPage);
+		for (const char* key : {"surfaces", "fixtures", "media", "modules"}) {
+			if (!page.contains(key) || !page[key].is_array()) continue;
+			for (const auto & element : page[key]) {
+				addParameterToCustomPage(element, key, &customPage);
+			}
 		}
 		pages.push_front(customPage);
 	}
