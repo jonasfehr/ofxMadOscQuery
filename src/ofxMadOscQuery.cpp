@@ -957,9 +957,12 @@ bool ofxMadOscQuery::connectWebSocket(int port) {
 	}
 	std::string host = ip.empty() ? "127.0.0.1" : ip;
 	wsConnected = wsClient->connect(host, port, [this](const std::string & msg) { handleWebSocketMessage(msg); });
+	// A (re)connect always yields a fresh socket with no server-side LISTEN
+	// subscriptions, so the dedupe set must be reset either way — otherwise
+	// subscribeAllParameters() after a reconnect silently subscribes nothing.
+	subscribedPaths.clear();
 	if (!wsConnected) {
 		ofLogWarning("ofxMadOscQuery") << "WebSocket connect failed to " << host << ":" << port;
-		subscribedPaths.clear();
 	} else {
 		ofLogNotice("ofxMadOscQuery") << "WebSocket connected on port " << port;
 	}

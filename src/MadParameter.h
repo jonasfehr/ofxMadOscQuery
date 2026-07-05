@@ -1,6 +1,6 @@
 //
 //  MadParameter.h
-//  MadMapper_oscQUery
+//  MadMapper_oscQuery
 //
 //  Created by Jonas Fehr on 06/04/2018.
 //
@@ -127,6 +127,21 @@ public:
 		return static_cast<int>(std::round(getParameterValue()));
 	}
 	
+	// ── Encoder-relative acceleration ────────────────────────────────────────────
+	// When linked to a CMT_CONTROL_CHANGE_ENCODER_RELATIVE component, incoming
+	// values are treated as an accumulator. We extract the per-tick delta, scale
+	// it by a velocity factor, and apply it to this->get() (the MM-synced value).
+	// After each tick the accumulator is reset to the computed value so it never
+	// diverges from the parameter — this prevents boundary oscillation.
+	bool          encoderAccelEnabled  = false;
+	float         encoderAccelBase     = 6.f;   // ticks/sec at which accel begins
+	float         encoderAccelMax      = 8.f;   // top-end delta multiplier
+	float         encoderSensitivity   = 0.8f;  // global scale on applied deltas
+	float         encoderPrevNorm      = 0.f;   // last accumulator position (post-reset)
+	bool          encoderResetting     = false; // guard against recursive callback
+	MidiComponent* linkedEncoder       = nullptr; // component to reset after each tick
+	std::chrono::steady_clock::time_point encoderLastStamp {};
+
 	// Direction-lock to avoid tug-of-war: last source + timestamp
 	enum class InputSource { None, Midi, Remote };
 	InputSource currentMaster = InputSource::None;
@@ -208,6 +223,46 @@ public:
 
 //    // Send OSC when parameter changed
 	void onParameterChange(float & p){
+		// Guard: ignore the recursive callback triggered when we reset the accumulator below
+		if (encoderResetting) return;
+
+		if (encoderAccelEnabled) {
+			// Clamp incoming p to [0,1]: ofParameter<float> with no explicit range can
+			// briefly hold an out-of-range value before the explicit clamping assignment
+			// in MidiComponent fires a second event. Without this clamp the second event
+			// produces a wrong-sign delta and the value oscillates near the boundaries.
+			const float pClamped = std::max(0.f, std::min(1.f, p));
+			const float delta = pClamped - encoderPrevNorm;
+
+			if (delta != 0.f) {
+				auto now = std::chrono::steady_clock::now();
+				auto dtMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - encoderLastStamp).count();
+				encoderLastStamp = now;
+
+				float accel = 1.f;
+				if (dtMs > 0 && dtMs < 500) {
+					const float vel = 1000.f / static_cast<float>(dtMs);
+					accel = std::min(vel / encoderAccelBase, encoderAccelMax);
+					if (accel < 1.f) accel = 1.f;
+				}
+				// Apply accelerated delta to the MM-synced value, not the raw accumulator.
+				p = std::max(0.f, std::min(1.f, this->get() + delta * accel * encoderSensitivity));
+
+				// Reset the encoder accumulator to the computed value so it stays in sync
+				// with the parameter. Without this the accumulator diverges (it only moves
+				// by one raw step per tick while the parameter moves by accel steps), which
+				// causes runaway behavior once the accumulator hits the 0/1 rail.
+				if (linkedEncoder) {
+					encoderResetting = true;
+					linkedEncoder->value = p;
+					encoderResetting = false;
+				}
+			} else {
+				p = pClamped;
+			}
+			encoderPrevNorm = p;
+		}
+
 		updateFromMidi = true;
 		this->set(p);
 
@@ -324,12 +379,17 @@ public:
 	}
 	
 	void linkMidiComponent(MidiComponent &midiComponent){
+		encoderAccelEnabled = (midiComponent.controlMessageType == CMT_CONTROL_CHANGE_ENCODER_RELATIVE);
+		linkedEncoder       = encoderAccelEnabled ? &midiComponent : nullptr;
+		encoderPrevNorm     = this->get();
+		encoderLastStamp    = std::chrono::steady_clock::now();
 		midiComponent.value = this->get();
 		midiComponent.value.addListener(this, &MadParameter::onParameterChange);
 	}
-	
+
 	void unlinkMidiComponent(MidiComponent &midiComponent){
 		midiComponent.value.removeListener(this, &MadParameter::onParameterChange);
+		linkedEncoder = nullptr;
 	}
 	
 	
