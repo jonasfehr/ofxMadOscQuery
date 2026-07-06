@@ -26,6 +26,9 @@ public:
 	void cycleBackward();
 	void linkDevice();
 	void unlinkDevice();
+	// Re-point the page at a new (or no) device after a surface swap —
+	// keeping the old pointer after the device is destroyed dangles.
+	void setMidiDevice(ofxMidiDevice *device) { midiDevice = device; }
 	std::pair<int, int> getRange();
 	bool isSubpage();
 	bool isGroup();
